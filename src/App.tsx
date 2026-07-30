@@ -31,6 +31,7 @@ import { AdminPinModal } from './components/AdminPinModal';
 import { AvatarModal } from './components/AvatarModal';
 import { Dashboard } from './components/Dashboard';
 import { SubFolderView } from './components/SubFolderView';
+import { LearningPortal } from './components/LearningPortal';
 import { Toast } from './components/Toast';
 
 import { 
@@ -56,24 +57,40 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
   const [settings, setSettings] = useState<Settings>(() => StorageService.getSettings());
 
+  // User role state: 'admin' | 'viewer'
+  const [role, setRole] = useState<'admin' | 'viewer'>(() => {
+    return (localStorage.getItem('user_role') as 'admin' | 'viewer') || 'viewer';
+  });
+
   // Teacher Avatar state
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() => StorageService.getAvatar());
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
+  const handleOpenAvatarModal = () => {
+    if (role !== 'admin') {
+      handleAddToast('Chỉ tài khoản Quản trị mới có quyền thay đổi ảnh đại diện!', 'error');
+      return;
+    }
+    setIsAvatarModalOpen(true);
+  };
+
   const handleSaveAvatar = (newAvatarDataUrl: string) => {
+    if (role !== 'admin') {
+      handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      return;
+    }
     StorageService.saveAvatar(newAvatarDataUrl);
     setAvatarUrl(newAvatarDataUrl);
   };
 
   const handleDeleteAvatar = () => {
+    if (role !== 'admin') {
+      handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      return;
+    }
     StorageService.deleteAvatar();
     setAvatarUrl(null);
   };
-
-  // User role state: 'admin' | 'viewer'
-  const [role, setRole] = useState<'admin' | 'viewer'>(() => {
-    return (localStorage.getItem('user_role') as 'admin' | 'viewer') || 'viewer';
-  });
 
   const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
 
@@ -828,7 +845,7 @@ export default function App() {
         user={user}
         onLogout={handleLogout}
         avatarUrl={avatarUrl}
-        onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
+        onOpenAvatarModal={handleOpenAvatarModal}
       />
 
       {/* Main Workspace Frame */}
@@ -953,6 +970,20 @@ export default function App() {
                   </p>
                 </div>
               </div>
+
+              {/* CỔNG HỌC LIỆU SỐ Section */}
+              <LearningPortal
+                allLinks={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
+                tinhoc3Links={tinhoc3Links}
+                tinhoc4Links={tinhoc4Links}
+                tinhoc5Links={tinhoc5Links}
+                categories={categories}
+                onSelectSubCategory={setActiveSubCategoryId}
+                onSelectCategory={setActiveCategoryId}
+                onChangeFilter={setActiveFilter}
+              />
+
+              <div id="links-directory-section"></div>
 
               {/* Context bar / breadcrumbs & filters (Hidden when viewing the subfolders overview) */}
               {!(activeCategoryId === 'cat-tech' && !activeSubCategoryId) && (

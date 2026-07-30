@@ -83,6 +83,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isElearningExpanded, setIsElearningExpanded] = useState(true);
   const [showConfig, setShowConfig] = useState(false);
 
+  const isAdmin = role === 'admin';
+
   const toggleTheme = () => {
     onUpdateSettings({
       ...settings,
@@ -163,9 +165,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex flex-col items-center text-center p-3.5 rounded-2xl bg-white/20 dark:bg-black/25 border border-white/10 dark:border-white/5 relative group transition-all duration-300 hover:shadow-md">
               {/* Circular Avatar 80-90px */}
               <div
-                onClick={onOpenAvatarModal}
-                className="relative w-20 h-20 rounded-full p-1 border-2 border-white/60 dark:border-white/10 hover:border-blue-500/60 transition-all duration-300 shadow-md bg-white/40 dark:bg-zinc-800/60 cursor-pointer group/avatar overflow-hidden mb-2"
-                title="Nhấp để đổi hoặc xóa ảnh đại diện"
+                onClick={isAdmin ? onOpenAvatarModal : undefined}
+                className={`relative w-20 h-20 rounded-full p-1 border-2 border-white/60 dark:border-white/10 shadow-md bg-white/40 dark:bg-zinc-800/60 overflow-hidden mb-2 ${
+                  isAdmin
+                    ? 'hover:border-blue-500/60 transition-all duration-300 cursor-pointer group/avatar'
+                    : 'cursor-default'
+                }`}
+                title={isAdmin ? 'Nhấp để đổi hoặc xóa ảnh đại diện' : 'Ảnh đại diện giáo viên'}
                 id="sidebar-teacher-avatar"
               >
                 <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-zinc-100 dark:bg-zinc-800">
@@ -173,14 +179,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <img
                       src={avatarUrl}
                       alt="Giáo viên Hồng Bích Trâm"
-                      className="w-full h-full object-cover rounded-full transition-transform duration-300 group-hover/avatar:scale-105"
+                      className={`w-full h-full object-cover rounded-full ${
+                        isAdmin ? 'transition-transform duration-300 group-hover/avatar:scale-105' : ''
+                      }`}
                     />
                   ) : user?.photoURL ? (
                     <img
                       src={user.photoURL}
                       alt={user.displayName || 'Giáo viên'}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover rounded-full transition-transform duration-300 group-hover/avatar:scale-105"
+                      className={`w-full h-full object-cover rounded-full ${
+                        isAdmin ? 'transition-transform duration-300 group-hover/avatar:scale-105' : ''
+                      }`}
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800">
@@ -189,11 +199,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </div>
 
-                {/* Hover Camera Overlay */}
-                <div className="absolute inset-0 rounded-full bg-black/40 text-white opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center">
-                  <Camera className="w-5 h-5 mb-0.5" />
-                  <span className="text-[9px] font-bold">Đổi ảnh</span>
-                </div>
+                {/* Hover Camera Overlay - ONLY FOR ADMIN */}
+                {isAdmin && (
+                  <div className="absolute inset-0 rounded-full bg-black/40 text-white opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center">
+                    <Camera className="w-5 h-5 mb-0.5" />
+                    <span className="text-[9px] font-bold">Đổi ảnh</span>
+                  </div>
+                )}
               </div>
 
               {/* Teacher info */}
@@ -206,23 +218,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </p>
               </div>
 
-              {/* Action Button */}
-              <button
-                onClick={onOpenAvatarModal}
-                className="mt-2 px-3 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-blue-500/20"
-                id="btn-edit-teacher-avatar"
-              >
-                <Camera className="w-3 h-3" />
-                <span>Đổi ảnh đại diện</span>
-              </button>
+              {/* Action Button - ONLY FOR ADMIN */}
+              {isAdmin && (
+                <button
+                  onClick={onOpenAvatarModal}
+                  className="mt-2 px-3 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-blue-500/20"
+                  id="btn-edit-teacher-avatar"
+                >
+                  <Camera className="w-3 h-3" />
+                  <span>Đổi ảnh đại diện</span>
+                </button>
+              )}
             </div>
           </div>
         ) : (
           <div className="px-1 mb-2 flex items-center justify-center">
             <div
-              onClick={onOpenAvatarModal}
-              className="w-10 h-10 rounded-full border-2 border-white/40 dark:border-white/10 hover:border-blue-500/60 shadow-sm overflow-hidden cursor-pointer group relative flex items-center justify-center bg-zinc-100 dark:bg-zinc-800"
-              title="Ảnh đại diện - Bấm để thay đổi"
+              onClick={isAdmin ? onOpenAvatarModal : undefined}
+              className={`w-10 h-10 rounded-full border-2 border-white/40 dark:border-white/10 shadow-sm overflow-hidden relative flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 ${
+                isAdmin ? 'hover:border-blue-500/60 cursor-pointer group' : 'cursor-default'
+              }`}
+              title={isAdmin ? 'Ảnh đại diện - Bấm để thay đổi' : 'Ảnh đại diện giáo viên'}
               id="sidebar-teacher-avatar-collapsed"
             >
               {avatarUrl ? (
