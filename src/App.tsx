@@ -28,6 +28,7 @@ import { AddEditModal } from './components/AddEditModal';
 import { CategoryModal } from './components/CategoryModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { AdminPinModal } from './components/AdminPinModal';
+import { AvatarModal } from './components/AvatarModal';
 import { Dashboard } from './components/Dashboard';
 import { SubFolderView } from './components/SubFolderView';
 import { Toast } from './components/Toast';
@@ -54,6 +55,20 @@ export default function App() {
   const [tinhoc5Links, setTinhoc5Links] = useState<LinkItem[]>(() => StorageService.getTinHoc5Links());
   const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
   const [settings, setSettings] = useState<Settings>(() => StorageService.getSettings());
+
+  // Teacher Avatar state
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => StorageService.getAvatar());
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+
+  const handleSaveAvatar = (newAvatarDataUrl: string) => {
+    StorageService.saveAvatar(newAvatarDataUrl);
+    setAvatarUrl(newAvatarDataUrl);
+  };
+
+  const handleDeleteAvatar = () => {
+    StorageService.deleteAvatar();
+    setAvatarUrl(null);
+  };
 
   // User role state: 'admin' | 'viewer'
   const [role, setRole] = useState<'admin' | 'viewer'>(() => {
@@ -812,6 +827,8 @@ export default function App() {
         totalLinksCount={links.length}
         user={user}
         onLogout={handleLogout}
+        avatarUrl={avatarUrl}
+        onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
       />
 
       {/* Main Workspace Frame */}
@@ -906,9 +923,9 @@ export default function App() {
           ) : (
             /* Links Directory Workspace view */
             <div className="max-w-6xl mx-auto space-y-6">
-              {/* Majestic Slogan Banner with AI design ("Kết nối tri thức - Chạm tới tương lai") */}
+              {/* Majestic Slogan Banner with AI design ("HỌC LIỆU SỐ MÔN TIN HỌC" & "Kết nối tri thức - Chạm tới tương lai") */}
               <div 
-                className="relative rounded-3xl overflow-hidden shadow-lg border border-white/10 dark:border-white/5 bg-gradient-to-br from-indigo-950 via-slate-900 to-zinc-950 text-white min-h-[180px] p-8 md:p-10 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all"
+                className="relative rounded-3xl overflow-hidden shadow-lg border border-white/10 dark:border-white/5 bg-gradient-to-br from-indigo-950 via-slate-900 to-zinc-950 text-white min-h-[180px] p-8 md:p-10 flex flex-col items-center justify-center text-center transition-all"
                 id="slogan-banner"
               >
                 {/* AI / Futuristic Neural Network Background */}
@@ -919,21 +936,22 @@ export default function App() {
                     className="w-full h-full object-cover opacity-50 dark:opacity-40 select-none pointer-events-none scale-105" 
                     referrerPolicy="no-referrer"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-900/80 to-transparent" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/60 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 via-zinc-900/60 to-zinc-950/80" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 to-transparent" />
                   {/* Subtle dynamic background light */}
                   <div className="absolute top-1/4 left-1/3 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl" />
                   <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
                 </div>
                 
-                {/* Left: Content */}
-                <div className="relative z-10 max-w-2xl">
-                  <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-300 via-blue-200 to-indigo-300 bg-clip-text text-transparent drop-shadow-md font-sans py-2">
-                    Kết nối tri thức - Chạm tới tương lai
+                {/* Center Content */}
+                <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-6">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black uppercase tracking-wider bg-gradient-to-r from-white via-cyan-200 to-blue-400 bg-clip-text text-transparent drop-shadow-lg font-sans">
+                    HỌC LIỆU SỐ MÔN TIN HỌC
                   </h1>
+                  <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold tracking-tight bg-gradient-to-r from-cyan-300 via-blue-200 to-indigo-300 bg-clip-text text-transparent drop-shadow-md font-sans">
+                    Kết nối tri thức - Chạm tới tương lai
+                  </p>
                 </div>
-
-
               </div>
 
               {/* Context bar / breadcrumbs & filters (Hidden when viewing the subfolders overview) */}
@@ -1176,6 +1194,16 @@ export default function App() {
         isOpen={isAdminPinModalOpen}
         onClose={() => setIsAdminPinModalOpen(false)}
         onConfirm={handleAdminPinConfirm}
+        onAddToast={handleAddToast}
+      />
+
+      {/* 5. Teacher Avatar Management Modal */}
+      <AvatarModal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        currentAvatar={avatarUrl}
+        onSaveAvatar={handleSaveAvatar}
+        onDeleteAvatar={handleDeleteAvatar}
         onAddToast={handleAddToast}
       />
 

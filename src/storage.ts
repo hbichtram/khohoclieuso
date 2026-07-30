@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   LINKS_TINHOC5: 'link_manager_links_tinhoc5',
   CATEGORIES: 'link_manager_categories',
   SETTINGS: 'link_manager_settings',
+  AVATAR: 'link_manager_teacher_avatar',
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -470,5 +471,30 @@ export const StorageService = {
 
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     return csvContent;
+  },
+
+  // Avatar Management
+  getAvatar(): string | null {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.AVATAR);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  saveAvatar(dataUrl: string): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.AVATAR, dataUrl);
+    } catch (e) {
+      console.error('Lỗi khi lưu ảnh đại diện', e);
+    }
+  },
+
+  deleteAvatar(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.AVATAR);
+    } catch (e) {
+      console.error('Lỗi khi xóa ảnh đại diện', e);
+    }
   }
 };
