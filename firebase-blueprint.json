@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "UserSetting": {
+      "title": "UserSetting",
+      "description": "User custom settings and theme",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "animationsEnabled": { "type": "boolean" },
+        "layout": { "type": "string" },
+        "itemsPerPage": { "type": "integer" }
+      },
+      "required": ["theme", "primaryColor", "animationsEnabled", "layout", "itemsPerPage"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "A custom link category managed by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "color": { "type": "string" },
+        "icon": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "name", "color", "userId"]
+    },
+    "LinkItem": {
+      "title": "LinkItem",
+      "description": "A bookmarked link item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "description": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "color": { "type": "string" },
+        "favicon": { "type": "string" },
+        "notes": { "type": "string" },
+        "isFavorite": { "type": "boolean" },
+        "isPinned": { "type": "boolean" },
+        "viewsCount": { "type": "integer" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "title", "url", "categoryId", "userId"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserSetting",
+      "description": "Collection of user-specific settings documents"
+    },
+    "users/{userId}/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "User-specific categories collection"
+    },
+    "users/{userId}/links/{linkId}": {
+      "schema": "LinkItem",
+      "description": "User-specific bookmarked links collection"
+    }
+  }
+}
