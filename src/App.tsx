@@ -140,7 +140,7 @@ export default function App() {
       bannerBgUrl: finalUrl,
       bannerConfig: updatedConfig,
     });
-    handleAddToast('Đã lưu cấu hình và vị trí Banner thành công.', 'success');
+    handleAddToast('Đã lưu vị trí Banner thành công.', 'success');
   };
 
   const handleDeleteBanner = () => {

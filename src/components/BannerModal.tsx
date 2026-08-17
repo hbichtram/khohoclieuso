@@ -3,22 +3,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Image as ImageIcon,
   Camera,
-  Upload,
   Trash2,
   RotateCcw,
   X,
   Check,
   AlertTriangle,
-  Sparkles,
   Info,
-  Sliders,
-  Move,
   ZoomIn,
-  ArrowUpDown,
-  ArrowLeftRight,
-  Maximize2,
-  Layers,
-  LayoutTemplate,
+  Move,
+  Sparkles,
 } from 'lucide-react';
 import { BannerConfig, DEFAULT_BANNER_CONFIG } from '../types';
 
@@ -45,19 +38,21 @@ export const BannerModal: React.FC<BannerModalProps> = ({
   onRestoreDefaultBanner,
   onAddToast,
 }) => {
-  // Pending draft states for live preview and adjustments
+  // Pending draft states for live preview and direct mouse adjustments
   const [draftUrl, setDraftUrl] = useState<string | null>(currentBannerUrl);
   const [pendingFileUrl, setPendingFileUrl] = useState<string | null>(null);
   const [posX, setPosX] = useState<number>(bannerConfig.posX ?? 50);
   const [posY, setPosY] = useState<number>(bannerConfig.posY ?? 50);
   const [scale, setScale] = useState<number>(bannerConfig.scale ?? 100);
-  const [marginTop, setMarginTop] = useState<number>(bannerConfig.marginTop ?? 0);
-  const [marginBottom, setMarginBottom] = useState<number>(bannerConfig.marginBottom ?? 24);
 
-  const [activeTab, setActiveTab] = useState<'image' | 'container'>('image');
+  const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [confirmMode, setConfirmMode] = useState<'delete' | 'restore' | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, initialPosX: 50, initialPosY: 50 });
 
   // Security guard: If not admin, do not allow viewing or using this modal
   if (role !== 'admin') {
@@ -72,11 +67,10 @@ export const BannerModal: React.FC<BannerModalProps> = ({
       setPosX(bannerConfig.posX ?? 50);
       setPosY(bannerConfig.posY ?? 50);
       setScale(bannerConfig.scale ?? 100);
-      setMarginTop(bannerConfig.marginTop ?? 0);
-      setMarginBottom(bannerConfig.marginBottom ?? 24);
       setIsUploading(false);
+      setIsDragging(false);
       setConfirmMode(null);
-      setActiveTab('image');
+      isDraggingRef.current = false;
     }
   }, [isOpen, currentBannerUrl, bannerConfig]);
 
@@ -117,7 +111,11 @@ export const BannerModal: React.FC<BannerModalProps> = ({
       if (dataUrl) {
         setPendingFileUrl(dataUrl);
         setIsUploading(false);
-        onAddToast('Đã tải ảnh lên để xem trước! Bạn có thể điều chỉnh vị trí ngay bên dưới.', 'info');
+        // Reset to center for new image
+        setPosX(50);
+        setPosY(50);
+        setScale(100);
+        onAddToast('Đã tải ảnh lên! Hãy dùng chuột nhấn giữ và kéo ảnh để căn vị trí.', 'info');
       } else {
         setIsUploading(false);
         onAddToast('Không thể đọc tệp hình ảnh. Vui lòng thử lại.', 'error');
@@ -126,24 +124,80 @@ export const BannerModal: React.FC<BannerModalProps> = ({
 
     reader.onerror = () => {
       setIsUploading(false);
-      onAddToast('Không thể cập nhật Banner. Vui lòng thử lại.', 'error');
+      onAddToast('Không thể tải ảnh. Vui lòng thử lại.', 'error');
     };
 
     reader.readAsDataURL(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Reset Positions & Scale to Center Defaults
+  // Direct Mouse / Touch Dragging Handlers
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (role !== 'admin') return;
+    e.preventDefault();
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (err) {
+      // Fallback
+    }
+
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      initialPosX: posX,
+      initialPosY: posY,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    e.preventDefault();
+
+    const container = containerRef.current;
+    const containerWidth = container ? container.clientWidth : 600;
+    const containerHeight = container ? container.clientHeight : 180;
+
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+
+    // Direct 1:1 intuitive dragging sensitivity:
+    // Dragging right pulls left edge into view -> posX decreases
+    // Dragging left pulls right edge into view -> posX increases
+    const sensitivityX = (100 / containerWidth) * 0.95;
+    const sensitivityY = (100 / containerHeight) * 0.95;
+
+    const deltaPosX = -dx * sensitivityX;
+    const deltaPosY = -dy * sensitivityY;
+
+    // Strictly clamped to 0% - 100% to guarantee no empty gaps/borders
+    const newPosX = Math.max(0, Math.min(100, Math.round(dragStartRef.current.initialPosX + deltaPosX)));
+    const newPosY = Math.max(0, Math.min(100, Math.round(dragStartRef.current.initialPosY + deltaPosY)));
+
+    setPosX(newPosX);
+    setPosY(newPosY);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {}
+  };
+
+  // Reset Position to default center (50% 50%, Scale 100%)
   const handleResetPosition = () => {
     setPosX(50);
     setPosY(50);
     setScale(100);
-    setMarginTop(0);
-    setMarginBottom(24);
-    onAddToast('Đã đặt lại vị trí về mặc định (Căn giữa 50% 50%, tỷ lệ 100%).', 'info');
+    onAddToast('Đã đặt lại vị trí và độ phóng đại về mặc định (Căn giữa 50% 50%).', 'info');
   };
 
-  // Save All Adjustments
+  // Save Position & Zoom Adjustments
   const handleSave = () => {
     if (role !== 'admin') {
       onAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
@@ -152,12 +206,11 @@ export const BannerModal: React.FC<BannerModalProps> = ({
 
     try {
       const updatedConfig: BannerConfig = {
+        ...bannerConfig,
         bgUrl: pendingFileUrl || draftUrl,
         posX,
         posY,
         scale,
-        marginTop,
-        marginBottom,
       };
 
       onSaveBannerConfig(updatedConfig, pendingFileUrl || undefined);
@@ -166,6 +219,18 @@ export const BannerModal: React.FC<BannerModalProps> = ({
     } catch (err) {
       onAddToast('Không thể cập nhật cấu hình Banner. Vui lòng thử lại.', 'error');
     }
+  };
+
+  // Cancel & Discard uncommitted changes
+  const handleCancel = () => {
+    setDraftUrl(currentBannerUrl);
+    setPendingFileUrl(null);
+    setPosX(bannerConfig.posX ?? 50);
+    setPosY(bannerConfig.posY ?? 50);
+    setScale(bannerConfig.scale ?? 100);
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    onClose();
   };
 
   // Confirm Delete Custom Image
@@ -195,8 +260,6 @@ export const BannerModal: React.FC<BannerModalProps> = ({
     setPosX(DEFAULT_BANNER_CONFIG.posX);
     setPosY(DEFAULT_BANNER_CONFIG.posY);
     setScale(DEFAULT_BANNER_CONFIG.scale);
-    setMarginTop(DEFAULT_BANNER_CONFIG.marginTop);
-    setMarginBottom(DEFAULT_BANNER_CONFIG.marginBottom);
     setConfirmMode(null);
   };
 
@@ -209,8 +272,8 @@ export const BannerModal: React.FC<BannerModalProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/65 backdrop-blur-sm"
+            onClick={handleCancel}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
             id="banner-modal-backdrop"
           />
 
@@ -229,28 +292,28 @@ export const BannerModal: React.FC<BannerModalProps> = ({
             initial={{ opacity: 0, scale: 0.96, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 15 }}
-            className="relative w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 z-10 overflow-hidden my-auto max-h-[95vh] flex flex-col"
+            className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 z-10 overflow-hidden my-auto max-h-[95vh] flex flex-col select-none"
             id="banner-modal-container"
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3.5 border-b border-zinc-150 dark:border-zinc-800 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white flex items-center justify-center shadow-md">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white flex items-center justify-center shadow-md shrink-0">
                   <ImageIcon className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-zinc-50 tracking-tight flex items-center gap-2">
-                    <span>QUẢN LÝ & ĐIỀU CHỈNH BANNER</span>
+                    <span>CHỈNH VỊ TRÍ BANNER</span>
                   </h3>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Tùy chỉnh ảnh nền, vị trí tọa độ và khoảng cách hiển thị của Banner
+                    Kéo ảnh trực tiếp bằng chuột để căn vị trí hiển thị đẹp mắt nhất
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleCancel}
                 className="p-2 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
                 title="Đóng"
                 id="btn-close-banner-modal"
@@ -259,12 +322,12 @@ export const BannerModal: React.FC<BannerModalProps> = ({
               </button>
             </div>
 
-            {/* Modal Content Scrollable Area */}
-            <div className="overflow-y-auto pr-1 py-4 space-y-5 flex-1">
+            {/* Modal Content */}
+            <div className="overflow-y-auto py-4 space-y-4 flex-1">
               {confirmMode === 'delete' ? (
                 /* Sub-view: Delete Confirmation */
                 <div className="flex flex-col items-center text-center py-8 space-y-4">
-                  <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 flex items-center justify-center animate-bounce shadow-sm">
+                  <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 flex items-center justify-center shadow-sm">
                     <AlertTriangle className="w-7 h-7" />
                   </div>
                   <div className="space-y-1 max-w-md">
@@ -307,7 +370,7 @@ export const BannerModal: React.FC<BannerModalProps> = ({
                       Bạn có muốn khôi phục Banner mặc định không?
                     </h4>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Banner sẽ trở về thiết kế màu sắc mặc định, tất cả vị trí và độ phóng đại sẽ được đưa về giá trị gốc.
+                      Banner sẽ trở về thiết kế màu sắc mặc định và độ phóng đại sẽ được đưa về giá trị gốc.
                     </p>
                   </div>
 
@@ -332,326 +395,138 @@ export const BannerModal: React.FC<BannerModalProps> = ({
                   </div>
                 </div>
               ) : (
-                /* MAIN MANAGEMENT & ADJUSTMENT VIEW */
-                <div className="space-y-5">
-                  {/* LIVE PREVIEW SECTION */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">
-                          Xem trước Banner trực tiếp (Live Preview)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
-                            hasCustomBanner
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                              : 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                          }`}
-                        >
-                          {hasCustomBanner ? (pendingFileUrl ? '📸 Ảnh mới tải lên' : '📸 Ảnh tùy chỉnh') : '🎨 Mặc định hệ thống'}
-                        </span>
-                      </div>
+                /* MAIN DRAG & DROP VIEW */
+                <div className="space-y-4">
+                  {/* Top Bar with Instruction and Action Buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-zinc-700 dark:text-zinc-200">
+                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                        <Move className="w-3.5 h-3.5" />
+                      </span>
+                      <span>🖱️ Nhấn giữ chuột và kéo ảnh để căn vị trí</span>
                     </div>
 
-                    {/* Realistic Mini Homepage Simulation Box */}
-                    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/70 dark:bg-zinc-950/70 p-3 sm:p-4 overflow-hidden shadow-inner">
-                      {/* Mini Header Mock */}
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-400 font-bold uppercase tracking-wider select-none">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-blue-500" />
-                          <span>CỔNG HỌC LIỆU SỐ TIN HỌC</span>
-                        </div>
-                        <span className="text-[9px] bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 rounded-md">Trang chủ</span>
-                      </div>
-
-                      {/* LIVE BANNER CONTAINER */}
-                      <div
-                        className="relative w-full rounded-2xl overflow-hidden shadow-md border border-blue-200/50 dark:border-blue-900/30 text-white min-h-[160px] sm:min-h-[175px] p-5 flex flex-col items-center justify-center text-center transition-all bg-zinc-900"
-                        style={{
-                          marginTop: `${marginTop}px`,
-                          marginBottom: `${marginBottom}px`,
-                        }}
-                        id="live-preview-banner-box"
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="h-8 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                        id="btn-upload-banner-in-modal"
                       >
-                        {/* Dynamic Background Image Layer with Live Position & Zoom */}
-                        {hasCustomBanner && activeImage ? (
-                          <>
-                            <div
-                              className="absolute inset-0 z-0 transition-transform duration-75 ease-out"
-                              style={{
-                                backgroundImage: `url(${activeImage})`,
-                                backgroundPosition: `${posX}% ${posY}%`,
-                                backgroundSize: 'cover',
-                                backgroundRepeat: 'no-repeat',
-                                transform: `scale(${scale / 100})`,
-                                transformOrigin: `${posX}% ${posY}%`,
-                              }}
-                            />
-                            {/* Layer overlay for text contrast */}
-                            <div className="absolute inset-0 z-1 bg-gradient-to-t from-black/60 via-black/35 to-black/45 backdrop-blur-[0.5px]" />
-                          </>
-                        ) : (
-                          /* System Default CSS Glowing Background */
-                          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600">
-                            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:20px_20px]" />
-                            <div className="absolute top-0 left-1/4 w-80 h-80 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
-                            <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/10" />
-                          </div>
-                        )}
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{hasCustomBanner ? 'Đổi ảnh khác' : 'Tải ảnh lên'}</span>
+                      </button>
 
-                        {/* Centered Protected Text Overlay (Strictly Fixed & Centered) */}
-                        <div className="relative z-10 max-w-xl mx-auto flex flex-col items-center justify-center text-center space-y-2 select-none pointer-events-none">
-                          <h2 className="text-lg sm:text-2xl font-black uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-sans">
-                            HỌC LIỆU SỐ MÔN TIN HỌC
-                          </h2>
-                          <p className="text-xs sm:text-sm font-bold tracking-normal text-cyan-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] font-sans">
-                            Kết nối tri thức - Chạm tới tương lai
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Mini Portal Mock */}
-                      <div className="mt-1 pt-2 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between text-[10px] text-zinc-400 select-none">
-                        <span className="font-bold flex items-center gap-1">
-                          <span>📚 CỔNG HỌC LIỆU SỐ (Tin học 3, 4, 5...)</span>
-                        </span>
-                        <span className="text-[9px] text-zinc-400 italic">Vị trí thực tế trên trang chủ</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ACTION TABS FOR FINE-TUNING */}
-                  <div className="flex items-center gap-2 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-zinc-700/60">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('image')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        activeTab === 'image'
-                          ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-sm border border-zinc-200 dark:border-zinc-700'
-                          : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                      }`}
-                      id="tab-adjust-image"
-                    >
-                      <Move className="w-3.5 h-3.5" />
-                      <span>1. ĐIỀU CHỈNH ẢNH NỀN</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('container')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        activeTab === 'container'
-                          ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-sm border border-zinc-200 dark:border-zinc-700'
-                          : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                      }`}
-                      id="tab-adjust-container"
-                    >
-                      <LayoutTemplate className="w-3.5 h-3.5" />
-                      <span>2. ĐIỀU CHỈNH KHUNG BANNER</span>
-                    </button>
-                  </div>
-
-                  {/* TAB 1: BACKGROUND IMAGE POSITION & ZOOM SLIDERS */}
-                  {activeTab === 'image' && (
-                    <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-850/60 border border-zinc-200 dark:border-zinc-800 space-y-4">
-                      {/* Top Action Row (Upload & Delete) */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading}
-                            className="h-9 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
-                            id="btn-upload-banner-in-tab"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>📷 Tải ảnh mới</span>
-                          </button>
-
-                          {hasCustomBanner && (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmMode('delete')}
-                              className="h-9 px-3 rounded-xl border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                              id="btn-delete-banner-in-tab"
-                              title="Xóa ảnh tùy chỉnh"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Xóa ảnh</span>
-                            </button>
-                          )}
-                        </div>
-
+                      {hasCustomBanner && (
                         <button
                           type="button"
-                          onClick={handleResetPosition}
-                          className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-                          id="btn-reset-pos-in-tab"
-                          title="Đặt lại tọa độ căn giữa"
+                          onClick={() => setConfirmMode('delete')}
+                          className="h-8 px-2.5 rounded-xl border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          id="btn-delete-banner-in-modal"
+                          title="Xóa ảnh tùy chỉnh"
                         >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>↺ Đặt lại vị trí</span>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Xóa ảnh</span>
                         </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* INTERACTIVE DRAGGABLE BANNER PREVIEW CONTAINER */}
+                  <div className="relative group">
+                    <div
+                      ref={containerRef}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onPointerCancel={handlePointerUp}
+                      className={`relative w-full rounded-2xl overflow-hidden shadow-lg border-2 text-white min-h-[175px] sm:min-h-[195px] p-6 flex flex-col items-center justify-center text-center transition-shadow select-none touch-none ${
+                        isDragging
+                          ? 'cursor-grabbing border-blue-500 shadow-xl ring-2 ring-blue-500/30'
+                          : 'cursor-grab border-blue-300 dark:border-blue-700/60 hover:border-blue-400'
+                      } bg-zinc-900`}
+                      id="interactive-banner-preview"
+                    >
+                      {/* Dynamic Background Image Layer with direct mouse coordinates */}
+                      {hasCustomBanner && activeImage ? (
+                        <>
+                          <div
+                            className="absolute inset-0 z-0 pointer-events-none"
+                            style={{
+                              backgroundImage: `url(${activeImage})`,
+                              backgroundPosition: `${posX}% ${posY}%`,
+                              backgroundSize: 'cover',
+                              backgroundRepeat: 'no-repeat',
+                              transform: `scale(${scale / 100})`,
+                              transformOrigin: `${posX}% ${posY}%`,
+                              transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+                            }}
+                          />
+                          {/* Protected overlay for readability */}
+                          <div className="absolute inset-0 z-1 bg-gradient-to-t from-black/60 via-black/35 to-black/45 backdrop-blur-[0.5px] pointer-events-none" />
+                        </>
+                      ) : (
+                        /* System Default CSS Banner when no custom image is loaded */
+                        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600">
+                          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:20px_20px]" />
+                          <div className="absolute top-0 left-1/4 w-80 h-80 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
+                          <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/10" />
+                        </div>
+                      )}
+
+                      {/* FIXED CENTERED TEXT OVERLAY (Strictly stationary & locked) */}
+                      <div className="relative z-10 max-w-xl mx-auto flex flex-col items-center justify-center text-center space-y-2 select-none pointer-events-none">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-sans">
+                          HỌC LIỆU SỐ MÔN TIN HỌC
+                        </h2>
+                        <p className="text-xs sm:text-sm font-bold tracking-normal text-cyan-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] font-sans">
+                          Kết nối tri thức - Chạm tới tương lai
+                        </p>
                       </div>
 
-                      {/* 1. Horizontal Position Slider */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5">
-                            <ArrowLeftRight className="w-3.5 h-3.5 text-blue-500" />
-                            <span>Vị trí ngang (Horizontal):</span>
-                          </span>
-                          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md text-[11px]">
-                            {posX}% {posX === 50 ? '(Căn giữa)' : posX < 50 ? '(Lệch trái)' : '(Lệch phải)'}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="1"
-                          value={posX}
-                          onChange={(e) => setPosX(Number(e.target.value))}
-                          className="w-full accent-blue-600 cursor-pointer h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
-                          id="slider-pos-x"
-                        />
-                        <div className="flex justify-between text-[10px] text-zinc-400 font-medium px-0.5">
-                          <span>Trái (0%)</span>
-                          <span>Giữa (50%)</span>
-                          <span>Phải (100%)</span>
-                        </div>
-                      </div>
-
-                      {/* 2. Vertical Position Slider */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5">
-                            <ArrowUpDown className="w-3.5 h-3.5 text-indigo-500" />
-                            <span>Vị trí dọc (Vertical):</span>
-                          </span>
-                          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md text-[11px]">
-                            {posY}% {posY === 50 ? '(Căn giữa)' : posY < 50 ? '(Lệch trên)' : '(Lệch dưới)'}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="1"
-                          value={posY}
-                          onChange={(e) => setPosY(Number(e.target.value))}
-                          className="w-full accent-indigo-600 cursor-pointer h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
-                          id="slider-pos-y"
-                        />
-                        <div className="flex justify-between text-[10px] text-zinc-400 font-medium px-0.5">
-                          <span>Trên (0%)</span>
-                          <span>Giữa (50%)</span>
-                          <span>Dưới (100%)</span>
-                        </div>
-                      </div>
-
-                      {/* 3. Zoom / Scale Slider */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5">
-                            <ZoomIn className="w-3.5 h-3.5 text-cyan-500" />
-                            <span>Độ phóng đại ảnh (Zoom):</span>
-                          </span>
-                          <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/50 px-2 py-0.5 rounded-md text-[11px]">
-                            {scale}% {scale === 100 ? '(Vừa khung)' : `${scale}%`}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="80"
-                          max="200"
-                          step="2"
-                          value={scale}
-                          onChange={(e) => setScale(Number(e.target.value))}
-                          className="w-full accent-cyan-600 cursor-pointer h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
-                          id="slider-scale"
-                        />
-                        <div className="flex justify-between text-[10px] text-zinc-400 font-medium px-0.5">
-                          <span>Thu nhỏ (80%)</span>
-                          <span>Vừa khung (100%)</span>
-                          <span>Phóng to (200%)</span>
-                        </div>
+                      {/* Floating Drag Indicator Badge */}
+                      <div className="absolute bottom-2.5 right-2.5 z-20 pointer-events-none flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/20 text-[10px] font-bold text-white/90 shadow-sm">
+                        <Move className="w-3 h-3 text-cyan-300" />
+                        <span>{isDragging ? 'Đang kéo ảnh...' : 'Nhấn & kéo để căn vị trí'}</span>
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {/* TAB 2: BANNER CONTAINER SPACING ADJUSTMENT */}
-                  {activeTab === 'container' && (
-                    <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-850/60 border border-zinc-200 dark:border-zinc-800 space-y-4">
-                      <div className="flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                        <LayoutTemplate className="w-4 h-4 text-blue-500" />
-                        <span>Khoảng cách khung Banner trên Trang chủ</span>
-                      </div>
-
-                      {/* Margin Top */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-zinc-700 dark:text-zinc-200">
-                            Khoảng cách phía trên (Margin Top):
-                          </span>
-                          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md text-[11px]">
-                            {marginTop} px
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="48"
-                          step="2"
-                          value={marginTop}
-                          onChange={(e) => setMarginTop(Number(e.target.value))}
-                          className="w-full accent-blue-600 cursor-pointer h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
-                          id="slider-margin-top"
-                        />
-                        <div className="flex justify-between text-[10px] text-zinc-400 font-medium px-0.5">
-                          <span>Sát mép (0px)</span>
-                          <span>Vừa phải (16px)</span>
-                          <span>Rộng rãi (48px)</span>
-                        </div>
-                      </div>
-
-                      {/* Margin Bottom */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-zinc-700 dark:text-zinc-200">
-                            Khoảng cách phía dưới (Margin Bottom):
-                          </span>
-                          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md text-[11px]">
-                            {marginBottom} px
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="48"
-                          step="2"
-                          value={marginBottom}
-                          onChange={(e) => setMarginBottom(Number(e.target.value))}
-                          className="w-full accent-indigo-600 cursor-pointer h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
-                          id="slider-margin-bottom"
-                        />
-                        <div className="flex justify-between text-[10px] text-zinc-400 font-medium px-0.5">
-                          <span>Sát cổng học liệu (0px)</span>
-                          <span>Mặc định (24px)</span>
-                          <span>Cách xa (48px)</span>
-                        </div>
-                      </div>
+                  {/* ZOOM SLIDER SECTION */}
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5">
+                        <ZoomIn className="w-4 h-4 text-blue-500" />
+                        <span>Độ phóng đại ảnh (Zoom):</span>
+                      </span>
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-md text-xs">
+                        {scale}%
+                      </span>
                     </div>
-                  )}
 
-                  {/* Informational Guidance Box */}
-                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-700 dark:text-blue-300 flex items-start gap-2.5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] font-semibold text-zinc-500 shrink-0">Thu nhỏ</span>
+                      <input
+                        type="range"
+                        min="100"
+                        max="220"
+                        step="1"
+                        value={scale}
+                        onChange={(e) => setScale(Number(e.target.value))}
+                        className="w-full accent-blue-600 cursor-pointer h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg"
+                        id="slider-banner-zoom"
+                      />
+                      <span className="text-[11px] font-semibold text-zinc-500 shrink-0">Phóng to</span>
+                    </div>
+                  </div>
+
+                  {/* Helper notice */}
+                  <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-700 dark:text-blue-300 flex items-start gap-2.5">
                     <Info className="w-4 h-4 shrink-0 mt-0.5" />
                     <p>
-                      <strong>Lưu ý:</strong> Mọi điều chỉnh vị trí ảnh và phóng đại sẽ chỉ tác động đến lớp nền. Dòng chữ <strong>"HỌC LIỆU SỐ MÔN TIN HỌC"</strong> và khẩu hiệu luôn được giữ cố định ở trung tâm và hiển thị sắc nét trên mọi thiết bị.
+                      Ảnh nền được tự động khống chế phạm vi để luôn phủ kín khung Banner mà không bị lộ viền trắng. Tiêu đề và slogan luôn được cố định ở trung tâm.
                     </p>
                   </div>
                 </div>
@@ -659,25 +534,24 @@ export const BannerModal: React.FC<BannerModalProps> = ({
             </div>
 
             {/* Modal Footer Controls */}
-            <div className="pt-3.5 border-t border-zinc-150 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="pt-3.5 border-t border-zinc-150 dark:border-zinc-800 flex items-center justify-between gap-2 shrink-0">
               <div>
-                {hasCustomBanner && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmMode('restore')}
-                    className="h-10 px-3.5 rounded-xl border border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                    id="btn-restore-default-banner-footer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Khôi phục mặc định</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleResetPosition}
+                  className="h-10 px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  id="btn-reset-banner-position"
+                  title="Đặt lại vị trí căn giữa"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>↺ Đặt lại vị trí</span>
+                </button>
               </div>
 
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleCancel}
                   className="px-4 h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
                   id="btn-cancel-banner-adjust"
                 >
@@ -687,7 +561,7 @@ export const BannerModal: React.FC<BannerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="px-6 h-10 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-[0.98]"
+                  className="px-5 sm:px-6 h-10 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs font-black flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
                   id="btn-save-banner-adjust"
                 >
                   <Check className="w-4 h-4" />
