@@ -26,6 +26,7 @@ import {
   Camera,
   User,
   Image as ImageIcon,
+  Sparkles,
 } from 'lucide-react';
 import { Category, Settings, THEME_COLORS } from '../types';
 
@@ -36,8 +37,8 @@ interface SidebarProps {
   onSelectCategory: (id: string | null) => void;
   activeSubCategoryId: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null;
   onSelectSubCategory: (id: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null) => void;
-  activeFilter: 'all' | 'favorites' | 'pinned' | 'dashboard';
-  onChangeFilter: (filter: 'all' | 'favorites' | 'pinned' | 'dashboard') => void;
+  activeFilter: 'all' | 'favorites' | 'pinned' | 'dashboard' | 'recent';
+  onChangeFilter: (filter: 'all' | 'favorites' | 'pinned' | 'dashboard' | 'recent') => void;
   settings: Settings;
   onUpdateSettings: (settings: Settings) => void;
   onOpenCategoryManager: () => void;
@@ -314,19 +315,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </p>
           )}
 
+          {/* Recent Materials view */}
+          <button
+            onClick={() => {
+              onChangeFilter('recent');
+              onSelectCategory(null);
+              onSelectSubCategory(null);
+              window.location.hash = '#/new-materials';
+            }}
+            style={activeFilter === 'recent' ? { backgroundColor: settings.primaryColor, boxShadow: `0 4px 12px ${settings.primaryColor}25` } : undefined}
+            className={`w-full flex items-center justify-between px-3 h-10 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeFilter === 'recent'
+                ? 'text-white font-bold'
+                : 'text-zinc-650 dark:text-zinc-350 hover:bg-white/10 dark:hover:bg-white/5'
+            }`}
+            title="Học liệu mới"
+            id="nav-btn-recent"
+          >
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span>Học liệu mới</span>}
+            </div>
+            {!isCollapsed && (
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                activeFilter === 'recent' ? 'bg-white/25 text-white' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+              }`}>
+                Mới
+              </span>
+            )}
+          </button>
+
           {/* Dashboard view */}
           <button
             onClick={() => {
               onChangeFilter('dashboard');
               onSelectCategory(null);
+              onSelectSubCategory(null);
+              window.location.hash = '#/dashboard';
             }}
             style={activeFilter === 'dashboard' ? { backgroundColor: settings.primaryColor, boxShadow: `0 4px 12px ${settings.primaryColor}25` } : undefined}
             className={`w-full flex items-center justify-between px-3 h-10 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               activeFilter === 'dashboard'
-                ? 'text-white'
+                ? 'text-white font-bold'
                 : 'text-zinc-650 dark:text-zinc-350 hover:bg-white/10 dark:hover:bg-white/5'
             }`}
-            title="Thống kê Dashboard"
+            title="Bảng thống kê Dashboard"
             id="nav-btn-dashboard"
           >
             <div className="flex items-center gap-3">
@@ -340,6 +373,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => {
               onChangeFilter('all');
               onSelectCategory(null);
+              onSelectSubCategory(null);
+              if (window.location.hash) {
+                window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              }
             }}
             style={activeFilter === 'all' && activeCategoryId === null ? { backgroundColor: `${settings.primaryColor}20`, borderColor: `${settings.primaryColor}30`, borderWidth: 1 } : undefined}
             className={`w-full flex items-center justify-between px-3 h-10 rounded-xl text-xs font-semibold transition-all cursor-pointer ${

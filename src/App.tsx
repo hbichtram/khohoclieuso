@@ -32,6 +32,7 @@ import { AdminPinModal } from './components/AdminPinModal';
 import { AvatarModal } from './components/AvatarModal';
 import { BannerModal } from './components/BannerModal';
 import { Dashboard } from './components/Dashboard';
+import { RecentMaterialsView } from './components/RecentMaterialsView';
 import { SubFolderView } from './components/SubFolderView';
 import { LearningPortal } from './components/LearningPortal';
 import { GradeLibraryView } from './components/GradeLibraryView';
@@ -321,7 +322,7 @@ export default function App() {
   const [loadingFirebase, setLoadingFirebase] = useState(isConfigured);
 
   // Navigation / Filter states
-  const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'pinned' | 'dashboard'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'pinned' | 'dashboard' | 'recent'>('all');
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [activeSubCategoryId, setActiveSubCategoryId] = useState<'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null>(null);
   const [activeGradeLibrary, setActiveGradeLibrary] = useState<'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null>(null);
@@ -357,7 +358,17 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.toLowerCase();
-      if (hash === '#/tin-hoc-3' || hash === '#tin-hoc-3' || hash === '#tinhoc3') {
+      if (hash === '#/new-materials' || hash === '#new-materials' || hash === '#/hoc-lieu-moi' || hash === '#hoc-lieu-moi') {
+        setActiveFilter('recent');
+        setActiveGradeLibrary(null);
+        setActiveCategoryId(null);
+        setActiveSubCategoryId(null);
+      } else if (hash === '#/dashboard' || hash === '#dashboard' || hash === '#/bang-thong-ke' || hash === '#bang-thong-ke') {
+        setActiveFilter('dashboard');
+        setActiveGradeLibrary(null);
+        setActiveCategoryId(null);
+        setActiveSubCategoryId(null);
+      } else if (hash === '#/tin-hoc-3' || hash === '#tin-hoc-3' || hash === '#tinhoc3') {
         setActiveGradeLibrary('tinhoc3');
         setActiveCategoryId('cat-work');
         setActiveSubCategoryId('tinhoc3');
@@ -1218,8 +1229,36 @@ export default function App() {
               onTogglePinned={handleTogglePinned}
               onAddToast={handleAddToast}
             />
+          ) : activeFilter === 'recent' ? (
+            /* HỌC LIỆU MỚI (Dedicated Standalone Recent Materials Page) */
+            <div className="max-w-6xl mx-auto">
+              <RecentMaterialsView
+                links={links}
+                categories={categories}
+                role={role}
+                settings={settings}
+                isLoading={loadingFirebase}
+                onOpenLink={handleOpenLink}
+                onEditLink={(link) => {
+                  setEditingLink(link);
+                  setIsAddEditOpen(true);
+                }}
+                onDeleteLink={(link) => {
+                  setDeletingLink(link);
+                  setIsDeleteConfirmOpen(true);
+                }}
+                onToggleFavorite={handleToggleFavorite}
+                onTogglePinned={handleTogglePinned}
+                onAddToast={handleAddToast}
+                onAddNewLink={() => {
+                  setEditingLink(null);
+                  setIsAddEditOpen(true);
+                }}
+                onBackToPortal={handleBackToPortal}
+              />
+            </div>
           ) : activeFilter === 'dashboard' ? (
-            /* Statistical View Dashboard panel */
+            /* BẢNG THỐNG KÊ (Dashboard Analytics View) */
             <div className="max-w-6xl mx-auto">
               <Dashboard
                 links={links}
@@ -1235,6 +1274,9 @@ export default function App() {
                   setActiveCategoryId(catId);
                   setActiveFilter('all');
                   setActiveGradeLibrary(null);
+                  if (window.location.hash) {
+                    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                  }
                 }}
                 onBackToPortal={handleBackToPortal}
               />
