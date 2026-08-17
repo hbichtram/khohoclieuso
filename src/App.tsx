@@ -18,6 +18,7 @@ import {
   Shield,
   Eye,
   Lock,
+  Camera,
 } from 'lucide-react';
 
 import { LinkItem, Category, Settings, ToastMessage } from './types';
@@ -29,6 +30,7 @@ import { CategoryModal } from './components/CategoryModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { AdminPinModal } from './components/AdminPinModal';
 import { AvatarModal } from './components/AvatarModal';
+import { BannerModal } from './components/BannerModal';
 import { Dashboard } from './components/Dashboard';
 import { SubFolderView } from './components/SubFolderView';
 import { LearningPortal } from './components/LearningPortal';
@@ -89,6 +91,56 @@ export default function App() {
     }
     StorageService.deleteAvatar();
     setAvatarUrl(null);
+  };
+
+  // Banner Background state
+  const [bannerBgUrl, setBannerBgUrl] = useState<string | null>(() => settings.bannerBgUrl || StorageService.getBanner());
+  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
+
+  // Synchronize banner if settings change (e.g. from cloud sync)
+  useEffect(() => {
+    if (settings.bannerBgUrl !== undefined) {
+      setBannerBgUrl(settings.bannerBgUrl);
+    }
+  }, [settings.bannerBgUrl]);
+
+  const handleOpenBannerModal = () => {
+    if (role !== 'admin') {
+      handleAddToast('Chỉ tài khoản Quản trị mới có quyền quản lý ảnh nền Banner!', 'error');
+      return;
+    }
+    setIsBannerModalOpen(true);
+  };
+
+  const handleSaveBanner = (newBannerDataUrl: string) => {
+    if (role !== 'admin') {
+      handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      return;
+    }
+    StorageService.saveBanner(newBannerDataUrl);
+    setBannerBgUrl(newBannerDataUrl);
+    handleUpdateSettings({ ...settings, bannerBgUrl: newBannerDataUrl });
+    handleAddToast('Đã cập nhật Banner thành công.', 'success');
+  };
+
+  const handleDeleteBanner = () => {
+    if (role !== 'admin') {
+      handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      return;
+    }
+    StorageService.deleteBanner();
+    setBannerBgUrl(null);
+    handleUpdateSettings({ ...settings, bannerBgUrl: null });
+  };
+
+  const handleRestoreDefaultBanner = () => {
+    if (role !== 'admin') {
+      handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      return;
+    }
+    StorageService.deleteBanner();
+    setBannerBgUrl(null);
+    handleUpdateSettings({ ...settings, bannerBgUrl: null });
   };
 
   const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
@@ -914,6 +966,7 @@ export default function App() {
         onLogout={handleLogout}
         avatarUrl={avatarUrl}
         onOpenAvatarModal={handleOpenAvatarModal}
+        onOpenBannerModal={handleOpenBannerModal}
       />
 
       {/* Main Workspace Frame */}
@@ -1054,25 +1107,56 @@ export default function App() {
             <div className="max-w-6xl mx-auto space-y-6">
               {/* Clean Digital Learning Portal Banner ("HỌC LIỆU SỐ MÔN TIN HỌC" & "Kết nối tri thức - Chạm tới tương lai") */}
               <div 
-                className="relative rounded-[24px] overflow-hidden shadow-lg border border-blue-200/50 dark:border-blue-900/30 bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600 text-white min-h-[170px] md:min-h-[190px] p-6 md:p-8 flex flex-col items-center justify-center text-center transition-all"
+                className={`relative rounded-[24px] overflow-hidden shadow-lg border border-blue-200/50 dark:border-blue-900/30 text-white min-h-[170px] md:min-h-[190px] p-6 md:p-8 flex flex-col items-center justify-center text-center transition-all ${
+                  bannerBgUrl
+                    ? 'bg-zinc-900'
+                    : 'bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600'
+                }`}
+                style={
+                  bannerBgUrl
+                    ? {
+                        backgroundImage: `url(${bannerBgUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                      }
+                    : undefined
+                }
                 id="slogan-banner"
               >
-                {/* Abstract Glowing Atmosphere Overlay - Pure CSS, no watermark */}
-                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-                  {/* Subtle Grid texture */}
-                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px]" />
-                  {/* Soft luminous radial lights */}
-                  <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
-                  <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/10" />
-                </div>
+                {/* Background Overlay Layer */}
+                {bannerBgUrl ? (
+                  /* Custom image protection overlay - ensures text legibility on all photo backgrounds */
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/35 to-black/45 backdrop-blur-[0.5px]" />
+                ) : (
+                  /* Abstract Glowing Atmosphere Overlay - Pure CSS default banner */
+                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px]" />
+                    <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
+                    <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/10" />
+                  </div>
+                )}
+
+                {/* Quick Banner Edit Button for Admin Only */}
+                {role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={handleOpenBannerModal}
+                    className="absolute top-3.5 right-3.5 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/40 hover:bg-black/60 active:scale-[0.98] text-white/90 hover:text-white backdrop-blur-md text-xs font-bold border border-white/20 transition-all cursor-pointer shadow-sm"
+                    title="Tùy chỉnh ảnh nền Banner (Chỉ Quản trị viên)"
+                    id="btn-quick-manage-banner"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-cyan-300" />
+                    <span className="hidden sm:inline">Tùy chỉnh Banner</span>
+                  </button>
+                )}
                 
                 {/* Center Content */}
-                <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-3.5">
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black uppercase tracking-wider text-white drop-shadow-md font-sans">
+                <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-3.5 select-none">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-sans">
                     HỌC LIỆU SỐ MÔN TIN HỌC
                   </h1>
-                  <p className="text-sm sm:text-base md:text-lg lg:text-xl font-bold tracking-normal text-cyan-100/95 drop-shadow-sm font-sans">
+                  <p className="text-sm sm:text-base md:text-lg lg:text-xl font-bold tracking-normal text-cyan-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] font-sans">
                     Kết nối tri thức - Chạm tới tương lai
                   </p>
                 </div>
@@ -1349,6 +1433,18 @@ export default function App() {
         currentAvatar={avatarUrl}
         onSaveAvatar={handleSaveAvatar}
         onDeleteAvatar={handleDeleteAvatar}
+        onAddToast={handleAddToast}
+      />
+
+      {/* 6. Banner Background Image Management Modal (Admin Only) */}
+      <BannerModal
+        isOpen={isBannerModalOpen}
+        onClose={() => setIsBannerModalOpen(false)}
+        role={role}
+        currentBannerUrl={bannerBgUrl}
+        onSaveBanner={handleSaveBanner}
+        onDeleteBanner={handleDeleteBanner}
+        onRestoreDefaultBanner={handleRestoreDefaultBanner}
         onAddToast={handleAddToast}
       />
 

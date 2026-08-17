@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   CATEGORIES: 'link_manager_categories',
   SETTINGS: 'link_manager_settings',
   AVATAR: 'link_manager_teacher_avatar',
+  BANNER: 'link_manager_banner_bg',
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -495,6 +496,31 @@ export const StorageService = {
       localStorage.removeItem(STORAGE_KEYS.AVATAR);
     } catch (e) {
       console.error('Lỗi khi xóa ảnh đại diện', e);
+    }
+  },
+
+  // Banner Management
+  getBanner(): string | null {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.BANNER);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  saveBanner(dataUrl: string): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.BANNER, dataUrl);
+    } catch (e) {
+      console.error('Lỗi khi lưu ảnh nền banner', e);
+    }
+  },
+
+  deleteBanner(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.BANNER);
+    } catch (e) {
+      console.error('Lỗi khi xóa ảnh nền banner', e);
     }
   }
 };

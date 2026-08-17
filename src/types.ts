@@ -37,6 +37,7 @@ export interface Settings {
   animationsEnabled: boolean;
   layout: 'grid' | 'list';
   itemsPerPage: number;
+  bannerBgUrl?: string | null;
 }
 
 export interface ToastMessage {

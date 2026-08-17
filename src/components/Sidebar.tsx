@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Camera,
   User,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Category, Settings, THEME_COLORS } from '../types';
 
@@ -52,6 +53,7 @@ interface SidebarProps {
   onLogout: () => void;
   avatarUrl?: string | null;
   onOpenAvatarModal?: () => void;
+  onOpenBannerModal?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -78,6 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   avatarUrl,
   onOpenAvatarModal,
+  onOpenBannerModal,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isElearningExpanded, setIsElearningExpanded] = useState(true);
@@ -617,6 +620,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {settings.animationsEnabled ? 'BẬT' : 'TẮT'}
                 </button>
               </div>
+
+              {/* Banner Management for Admin */}
+              {role === 'admin' && onOpenBannerModal && (
+                <>
+                  <div className="h-px bg-white/10 dark:bg-white/5 my-1" />
+                  <div className="pt-0.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-zinc-500">Banner</span>
+                      <span className="text-[9px] font-semibold text-zinc-400">
+                        {settings.bannerBgUrl ? 'Ảnh tùy chỉnh' : 'Mặc định'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={onOpenBannerModal}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-blue-600/15 hover:bg-blue-600/25 text-blue-600 dark:text-blue-400 border border-blue-500/25 text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
+                      id="btn-sidebar-manage-banner"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>Quản lý ảnh nền Banner</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
         )}
