@@ -85,7 +85,6 @@ export const SubFolderView: React.FC<SubFolderViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
         {folders.map((folder, index) => {
           const count = getCount(folder.id);
-          const displayCount = count > 0 ? count : 18;
           return (
             <motion.div
               key={folder.id}
@@ -115,9 +114,9 @@ export const SubFolderView: React.FC<SubFolderViewProps> = ({
                   {folder.subTitle}
                 </div>
 
-                {/* Lessons Counter (e.g. 18 bài giảng) */}
+                {/* Lessons Counter */}
                 <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mb-2">
-                  {displayCount} bài giảng
+                  {count} bài giảng
                 </p>
               </div>
 

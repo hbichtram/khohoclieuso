@@ -50,13 +50,15 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
 
 export default function App() {
-  // Load initial configurations from StorageService
+  // Load initial configurations from StorageService (Unified Single Source of Truth)
   const [links, setLinks] = useState<LinkItem[]>(() => StorageService.getLinks());
-  const [tinhoc3Links, setTinhoc3Links] = useState<LinkItem[]>(() => StorageService.getTinHoc3Links());
-  const [tinhoc4Links, setTinhoc4Links] = useState<LinkItem[]>(() => StorageService.getTinHoc4Links());
-  const [tinhoc5Links, setTinhoc5Links] = useState<LinkItem[]>(() => StorageService.getTinHoc5Links());
   const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
   const [settings, setSettings] = useState<Settings>(() => StorageService.getSettings());
+
+  // Subcategory lists derived directly from unified links
+  const tinhoc3Links = useMemo(() => links.filter((l) => l.subCategoryId === 'tinhoc3'), [links]);
+  const tinhoc4Links = useMemo(() => links.filter((l) => l.subCategoryId === 'tinhoc4'), [links]);
+  const tinhoc5Links = useMemo(() => links.filter((l) => l.subCategoryId === 'tinhoc5'), [links]);
 
   // User role state: 'admin' | 'viewer'
   const [role, setRole] = useState<'admin' | 'viewer'>(() => {
@@ -423,9 +425,6 @@ export default function App() {
       } else {
         // Reset to local database when logged out
         setLinks(StorageService.getLinks());
-        setTinhoc3Links(StorageService.getTinHoc3Links());
-        setTinhoc4Links(StorageService.getTinHoc4Links());
-        setTinhoc5Links(StorageService.getTinHoc5Links());
         setCategories(StorageService.getCategories());
         setSettings(StorageService.getSettings());
       }
@@ -494,69 +493,27 @@ export default function App() {
       handleSyncError(error, `users/${user.uid}/categories`, OperationType.GET);
     });
 
-    // 3. Subscribe to Links collection
+    // 3. Subscribe to Links collection (Unified single collection)
     const linksColRef = collection(db, 'users', user.uid, 'links');
     const unsubLinks = onSnapshot(linksColRef, async (snap) => {
       const linksList: LinkItem[] = [];
-      const tinhoc3List: LinkItem[] = [];
-      const tinhoc4List: LinkItem[] = [];
-      const tinhoc5List: LinkItem[] = [];
 
       snap.forEach((docSnap) => {
         const item = docSnap.data() as LinkItem;
         const linkWithId = { ...item, id: docSnap.id } as LinkItem;
-        if (item.subCategoryId === 'tinhoc3') {
-          tinhoc3List.push(linkWithId);
-        } else if (item.subCategoryId === 'tinhoc4') {
-          tinhoc4List.push(linkWithId);
-        } else if (item.subCategoryId === 'tinhoc5') {
-          tinhoc5List.push(linkWithId);
-        } else {
-          linksList.push(linkWithId);
-        }
+        linksList.push(linkWithId);
       });
 
       setLinks(linksList);
-      setTinhoc3Links(tinhoc3List);
-      setTinhoc4Links(tinhoc4List);
-      setTinhoc5Links(tinhoc5List);
+      StorageService.saveLinks(linksList);
 
       // Upload local links if Firestore is completely empty
-      if (snap.empty) {
-        if (links.length > 0) {
-          for (const link of links) {
-            await setDoc(doc(linksColRef, link.id), {
-              ...link,
-              userId: user.uid,
-            }).catch((err) => handleSyncError(err, `users/${user.uid}/links/${link.id}`, OperationType.WRITE));
-          }
-        }
-        if (tinhoc3Links.length > 0) {
-          for (const link of tinhoc3Links) {
-            await setDoc(doc(linksColRef, link.id), {
-              ...link,
-              userId: user.uid,
-              subCategoryId: 'tinhoc3',
-            }).catch((err) => handleSyncError(err, `users/${user.uid}/links/${link.id}`, OperationType.WRITE));
-          }
-        }
-        if (tinhoc4Links.length > 0) {
-          for (const link of tinhoc4Links) {
-            await setDoc(doc(linksColRef, link.id), {
-              ...link,
-              userId: user.uid,
-              subCategoryId: 'tinhoc4',
-            }).catch((err) => handleSyncError(err, `users/${user.uid}/links/${link.id}`, OperationType.WRITE));
-          }
-        }
-        if (tinhoc5Links.length > 0) {
-          for (const link of tinhoc5Links) {
-            await setDoc(doc(linksColRef, link.id), {
-              ...link,
-              userId: user.uid,
-              subCategoryId: 'tinhoc5',
-            }).catch((err) => handleSyncError(err, `users/${user.uid}/links/${link.id}`, OperationType.WRITE));
-          }
+      if (snap.empty && links.length > 0) {
+        for (const link of links) {
+          await setDoc(doc(linksColRef, link.id), {
+            ...link,
+            userId: user.uid,
+          }).catch((err) => handleSyncError(err, `users/${user.uid}/links/${link.id}`, OperationType.WRITE));
         }
       }
     }, (error) => {
@@ -647,58 +604,36 @@ export default function App() {
     }
   };
 
-  // Subfolder counts
+  // Unified Subfolder counts derived directly from links
   const tinhoc3Count = useMemo(
-    () => tinhoc3Links.filter((l) => role === 'admin' || !l.isHidden).length,
-    [tinhoc3Links, role]
+    () => links.filter((l) => l.subCategoryId === 'tinhoc3' && (role === 'admin' || !l.isHidden)).length,
+    [links, role]
   );
   const tinhoc4Count = useMemo(
-    () => tinhoc4Links.filter((l) => role === 'admin' || !l.isHidden).length,
-    [tinhoc4Links, role]
+    () => links.filter((l) => l.subCategoryId === 'tinhoc4' && (role === 'admin' || !l.isHidden)).length,
+    [links, role]
   );
   const tinhoc5Count = useMemo(
-    () => tinhoc5Links.filter((l) => role === 'admin' || !l.isHidden).length,
-    [tinhoc5Links, role]
+    () => links.filter((l) => l.subCategoryId === 'tinhoc5' && (role === 'admin' || !l.isHidden)).length,
+    [links, role]
   );
 
-  // Helper count of links in each category
+  // Total count of all links
+  const totalLinksCount = useMemo(
+    () => links.filter((l) => role === 'admin' || !l.isHidden).length,
+    [links, role]
+  );
+
+  // Links count in each category
   const linksCountByCategory = useMemo(() => {
     const counts: Record<string, number> = {};
     links.forEach((l) => {
-      counts[l.categoryId] = (counts[l.categoryId] || 0) + 1;
+      if (role === 'admin' || !l.isHidden) {
+        counts[l.categoryId] = (counts[l.categoryId] || 0) + 1;
+      }
     });
-    counts['cat-work'] = (counts['cat-work'] || 0) + tinhoc3Count + tinhoc4Count + tinhoc5Count;
     return counts;
-  }, [links, tinhoc3Count, tinhoc4Count, tinhoc5Count]);
-
-  // Helper to save subfolder or general links to local storage
-  const saveLinkToLocalStorage = (link: LinkItem, isDelete = false) => {
-    if (link.subCategoryId === 'tinhoc3') {
-      const newList = isDelete 
-        ? tinhoc3Links.filter(l => l.id !== link.id)
-        : (tinhoc3Links.some(l => l.id === link.id) ? tinhoc3Links.map(l => l.id === link.id ? link : l) : [link, ...tinhoc3Links]);
-      setTinhoc3Links(newList);
-      StorageService.saveTinHoc3Links(newList);
-    } else if (link.subCategoryId === 'tinhoc4') {
-      const newList = isDelete 
-        ? tinhoc4Links.filter(l => l.id !== link.id)
-        : (tinhoc4Links.some(l => l.id === link.id) ? tinhoc4Links.map(l => l.id === link.id ? link : l) : [link, ...tinhoc4Links]);
-      setTinhoc4Links(newList);
-      StorageService.saveTinHoc4Links(newList);
-    } else if (link.subCategoryId === 'tinhoc5') {
-      const newList = isDelete 
-        ? tinhoc5Links.filter(l => l.id !== link.id)
-        : (tinhoc5Links.some(l => l.id === link.id) ? tinhoc5Links.map(l => l.id === link.id ? link : l) : [link, ...tinhoc5Links]);
-      setTinhoc5Links(newList);
-      StorageService.saveTinHoc5Links(newList);
-    } else {
-      const newList = isDelete 
-        ? links.filter(l => l.id !== link.id)
-        : (links.some(l => l.id === link.id) ? links.map(l => l.id === link.id ? link : l) : [link, ...links]);
-      setLinks(newList);
-      StorageService.saveLinks(newList);
-    }
-  };
+  }, [links, role]);
 
   // Links mutators
   const handleSaveLink = async (payload: Partial<LinkItem>) => {
@@ -714,16 +649,15 @@ export default function App() {
         updatedAt: new Date().toISOString(),
       } as LinkItem;
 
+      const updatedLinks = links.map((l) => (l.id === editingLink.id ? updatedLink : l));
+      setLinks(updatedLinks);
+      StorageService.saveLinks(updatedLinks);
+
       if (user && db) {
         await setDoc(doc(db, 'users', user.uid, 'links', editingLink.id), {
           ...updatedLink,
           userId: user.uid,
         }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${editingLink.id}`));
-      } else {
-        if (editingLink.subCategoryId !== updatedLink.subCategoryId) {
-          saveLinkToLocalStorage(editingLink, true);
-        }
-        saveLinkToLocalStorage(updatedLink, false);
       }
       handleAddToast('Cập nhật liên kết thành công!', 'success');
     } else {
@@ -752,13 +686,15 @@ export default function App() {
         isHidden: !!payload.isHidden,
       };
 
+      const updatedLinks = [newLink, ...links];
+      setLinks(updatedLinks);
+      StorageService.saveLinks(updatedLinks);
+
       if (user && db) {
         await setDoc(doc(db, 'users', user.uid, 'links', newLinkId), {
           ...newLink,
           userId: user.uid,
         }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${newLinkId}`));
-      } else {
-        saveLinkToLocalStorage(newLink, false);
       }
       handleAddToast('Đã lưu liên kết mới thành công!', 'success');
     }
@@ -780,11 +716,13 @@ export default function App() {
       return;
     }
     if (deletingLink) {
+      const updatedLinks = links.filter((l) => l.id !== deletingLink.id);
+      setLinks(updatedLinks);
+      StorageService.saveLinks(updatedLinks);
+
       if (user && db) {
         await deleteDoc(doc(db, 'users', user.uid, 'links', deletingLink.id))
           .catch((err) => handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/links/${deletingLink.id}`));
-      } else {
-        saveLinkToLocalStorage(deletingLink, true);
       }
       handleAddToast('Đã xóa liên kết thành công!', 'success');
     }
@@ -797,8 +735,7 @@ export default function App() {
       handleAddToast('Bạn đang ở chế độ Người xem, không thể thay đổi trạng thái yêu thích!', 'error');
       return;
     }
-    const allLinksList = [...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links];
-    const targetLink = allLinksList.find((l) => l.id === id);
+    const targetLink = links.find((l) => l.id === id);
     if (!targetLink) return;
     const nextState = !targetLink.isFavorite;
     handleAddToast(nextState ? 'Đã thêm vào danh sách yêu thích!' : 'Đã xóa khỏi danh sách yêu thích!', 'info');
@@ -806,15 +743,18 @@ export default function App() {
     const updatedLink = {
       ...targetLink,
       isFavorite: nextState,
+      updatedAt: new Date().toISOString(),
     };
+
+    const updatedLinks = links.map((l) => (l.id === id ? updatedLink : l));
+    setLinks(updatedLinks);
+    StorageService.saveLinks(updatedLinks);
 
     if (user && db) {
       await setDoc(doc(db, 'users', user.uid, 'links', id), {
         ...updatedLink,
         userId: user.uid,
       }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${id}`));
-    } else {
-      saveLinkToLocalStorage(updatedLink, false);
     }
   };
 
@@ -823,8 +763,7 @@ export default function App() {
       handleAddToast('Bạn đang ở chế độ Người xem, không thể thay đổi trạng thái ghim!', 'error');
       return;
     }
-    const allLinksList = [...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links];
-    const targetLink = allLinksList.find((l) => l.id === id);
+    const targetLink = links.find((l) => l.id === id);
     if (!targetLink) return;
     const nextState = !targetLink.isPinned;
     handleAddToast(nextState ? 'Đã ghim liên kết lên đầu!' : 'Đã bỏ ghim liên kết!', 'info');
@@ -832,21 +771,23 @@ export default function App() {
     const updatedLink = {
       ...targetLink,
       isPinned: nextState,
+      updatedAt: new Date().toISOString(),
     };
+
+    const updatedLinks = links.map((l) => (l.id === id ? updatedLink : l));
+    setLinks(updatedLinks);
+    StorageService.saveLinks(updatedLinks);
 
     if (user && db) {
       await setDoc(doc(db, 'users', user.uid, 'links', id), {
         ...updatedLink,
         userId: user.uid,
       }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${id}`));
-    } else {
-      saveLinkToLocalStorage(updatedLink, false);
     }
   };
 
   const handleIncrementViews = async (id: string) => {
-    const allLinksList = [...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links];
-    const targetLink = allLinksList.find((l) => l.id === id);
+    const targetLink = links.find((l) => l.id === id);
     if (!targetLink) return;
     const nextViews = (targetLink.viewsCount || 0) + 1;
 
@@ -855,13 +796,15 @@ export default function App() {
       viewsCount: nextViews,
     };
 
+    const updatedLinks = links.map((l) => (l.id === id ? updatedLink : l));
+    setLinks(updatedLinks);
+    StorageService.saveLinks(updatedLinks);
+
     if (user && db) {
       await setDoc(doc(db, 'users', user.uid, 'links', id), {
         ...updatedLink,
         userId: user.uid,
       }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${id}`));
-    } else {
-      saveLinkToLocalStorage(updatedLink, false);
     }
   };
 
@@ -1150,7 +1093,10 @@ export default function App() {
         onTriggerExportJSON={handleExportJSON}
         onTriggerExportCSV={handleExportCSV}
         linksCountByCategory={linksCountByCategory}
-        totalLinksCount={links.length}
+        tinhoc3Count={tinhoc3Count}
+        tinhoc4Count={tinhoc4Count}
+        tinhoc5Count={tinhoc5Count}
+        totalLinksCount={totalLinksCount}
         user={user}
         onLogout={handleLogout}
         avatarUrl={avatarUrl}
@@ -1250,7 +1196,7 @@ export default function App() {
             /* DEDICATED GRADE LIBRARY VIEW (TIN HỌC 3, 4, 5) */
             <GradeLibraryView
               grade={activeGradeLibrary}
-              links={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
+              links={links}
               category={categories.find(c => c.id === 'cat-work' || c.id === 'cat-tech' || c.name.toLowerCase().includes('e-learning'))}
               role={role}
               settings={settings}
@@ -1275,20 +1221,22 @@ export default function App() {
           ) : activeFilter === 'dashboard' ? (
             /* Statistical View Dashboard panel */
             <div className="max-w-6xl mx-auto">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-50" id="dashboard-title">
-                    Báo cáo & Phân tích
-                  </h1>
-                  <p className="text-xs text-zinc-500">
-                    Tổng quan trực quan về kho lưu trữ liên kết của bạn
-                  </p>
-                </div>
-              </div>
               <Dashboard
                 links={links}
+                tinhoc3Links={tinhoc3Links}
+                tinhoc4Links={tinhoc4Links}
+                tinhoc5Links={tinhoc5Links}
                 categories={categories}
-                onOpenLink={(link) => handleIncrementViews(link.id)}
+                role={role}
+                settings={settings}
+                onOpenLink={handleOpenLink}
+                onNavigateGrade={handleOpenGradeLibrary}
+                onNavigateCategory={(catId) => {
+                  setActiveCategoryId(catId);
+                  setActiveFilter('all');
+                  setActiveGradeLibrary(null);
+                }}
+                onBackToPortal={handleBackToPortal}
               />
             </div>
           ) : (
@@ -1379,7 +1327,7 @@ export default function App() {
 
               {/* CỔNG HỌC LIỆU SỐ Section */}
               <LearningPortal
-                allLinks={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
+                allLinks={links}
                 tinhoc3Links={tinhoc3Links}
                 tinhoc4Links={tinhoc4Links}
                 tinhoc5Links={tinhoc5Links}
@@ -1488,7 +1436,7 @@ export default function App() {
               {/* Links Grid rendering */}
               {activeCategoryId === 'cat-work' && !activeSubCategoryId ? (
                 <SubFolderView
-                  links={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
+                  links={links}
                   role={role}
                   onSelectSubCategory={(subId) => {
                     if (subId) {
