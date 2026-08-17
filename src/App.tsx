@@ -1014,10 +1014,10 @@ export default function App() {
             </div>
             <div className="hidden sm:flex flex-col">
               <span className="font-extrabold text-xs tracking-wider text-zinc-900 dark:text-white" style={{ color: settings.primaryColor }}>
-                LINK MANAGER
+                KHO HỌC LIỆU
               </span>
               <span className="text-[9px] font-semibold text-zinc-400 dark:text-zinc-500">
-                Cổng Học Liệu Số
+                Tin học tiểu học
               </span>
             </div>
           </div>

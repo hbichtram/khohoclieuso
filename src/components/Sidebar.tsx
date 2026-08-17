@@ -128,16 +128,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Header Title */}
       <div className="h-16 flex items-center justify-between px-4 w-full border-b border-white/10 dark:border-white/5 overflow-hidden">
         {!isCollapsed && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <div
               style={{ backgroundColor: settings.primaryColor, boxShadow: `0 4px 12px ${settings.primaryColor}30` }}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm"
             >
               <Database className="w-4.5 h-4.5" />
             </div>
-            <span className="font-extrabold text-xs tracking-wider" style={{ color: settings.primaryColor }}>
-              LINK MANAGER
-            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-extrabold text-xs tracking-wider truncate" style={{ color: settings.primaryColor }}>
+                KHO HỌC LIỆU
+              </span>
+              <span className="text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 truncate">
+                Tin học tiểu học
+              </span>
+            </div>
           </div>
         )}
         {isCollapsed && (
