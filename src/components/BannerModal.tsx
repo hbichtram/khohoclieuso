@@ -12,6 +12,7 @@ import {
   ZoomIn,
   Move,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { BannerConfig, DEFAULT_BANNER_CONFIG } from '../types';
 
@@ -21,9 +22,9 @@ interface BannerModalProps {
   role: 'admin' | 'viewer';
   bannerConfig: BannerConfig;
   currentBannerUrl: string | null;
-  onSaveBannerConfig: (config: BannerConfig, newImageDataUrl?: string | null) => void;
-  onDeleteBanner: () => void;
-  onRestoreDefaultBanner: () => void;
+  onSaveBannerConfig: (config: BannerConfig, newImageDataUrl?: string | null) => Promise<void> | void;
+  onDeleteBanner: () => Promise<void> | void;
+  onRestoreDefaultBanner: () => Promise<void> | void;
   onAddToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
@@ -47,6 +48,7 @@ export const BannerModal: React.FC<BannerModalProps> = ({
 
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [confirmMode, setConfirmMode] = useState<'delete' | 'restore' | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -198,13 +200,16 @@ export const BannerModal: React.FC<BannerModalProps> = ({
   };
 
   // Save Position & Zoom Adjustments
-  const handleSave = () => {
-    if (role !== 'admin') {
-      onAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+  const handleSave = async () => {
+    if (role !== 'admin' || isSaving) {
+      if (role !== 'admin') {
+        onAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      }
       return;
     }
 
     try {
+      setIsSaving(true);
       const updatedConfig: BannerConfig = {
         ...bannerConfig,
         bgUrl: pendingFileUrl || draftUrl,
@@ -213,16 +218,19 @@ export const BannerModal: React.FC<BannerModalProps> = ({
         scale,
       };
 
-      onSaveBannerConfig(updatedConfig, pendingFileUrl || undefined);
+      await onSaveBannerConfig(updatedConfig, pendingFileUrl || undefined);
       setPendingFileUrl(null);
       onClose();
     } catch (err) {
-      onAddToast('Không thể cập nhật cấu hình Banner. Vui lòng thử lại.', 'error');
+      // Error toast is handled in caller, modal stays open for retry
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Cancel & Discard uncommitted changes
   const handleCancel = () => {
+    if (isSaving) return;
     setDraftUrl(currentBannerUrl);
     setPendingFileUrl(null);
     setPosX(bannerConfig.posX ?? 50);
@@ -234,33 +242,51 @@ export const BannerModal: React.FC<BannerModalProps> = ({
   };
 
   // Confirm Delete Custom Image
-  const handleConfirmDelete = () => {
-    if (role !== 'admin') {
-      onAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+  const handleConfirmDelete = async () => {
+    if (role !== 'admin' || isSaving) {
+      if (role !== 'admin') {
+        onAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      }
       return;
     }
-    onDeleteBanner();
-    setDraftUrl(null);
-    setPendingFileUrl(null);
-    setPosX(50);
-    setPosY(50);
-    setScale(100);
-    setConfirmMode(null);
+    try {
+      setIsSaving(true);
+      await onDeleteBanner();
+      setDraftUrl(null);
+      setPendingFileUrl(null);
+      setPosX(50);
+      setPosY(50);
+      setScale(100);
+      setConfirmMode(null);
+    } catch (err) {
+      // Handled
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Confirm Restore Default Banner
-  const handleConfirmRestore = () => {
-    if (role !== 'admin') {
-      onAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+  const handleConfirmRestore = async () => {
+    if (role !== 'admin' || isSaving) {
+      if (role !== 'admin') {
+        onAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
+      }
       return;
     }
-    onRestoreDefaultBanner();
-    setDraftUrl(null);
-    setPendingFileUrl(null);
-    setPosX(DEFAULT_BANNER_CONFIG.posX);
-    setPosY(DEFAULT_BANNER_CONFIG.posY);
-    setScale(DEFAULT_BANNER_CONFIG.scale);
-    setConfirmMode(null);
+    try {
+      setIsSaving(true);
+      await onRestoreDefaultBanner();
+      setDraftUrl(null);
+      setPendingFileUrl(null);
+      setPosX(DEFAULT_BANNER_CONFIG.posX);
+      setPosY(DEFAULT_BANNER_CONFIG.posY);
+      setScale(DEFAULT_BANNER_CONFIG.scale);
+      setConfirmMode(null);
+    } catch (err) {
+      // Handled
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -552,7 +578,8 @@ export const BannerModal: React.FC<BannerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-4 h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  disabled={isSaving}
+                  className="px-4 h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors cursor-pointer"
                   id="btn-cancel-banner-adjust"
                 >
                   Hủy
@@ -561,11 +588,21 @@ export const BannerModal: React.FC<BannerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="px-5 sm:px-6 h-10 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs font-black flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 sm:px-6 h-10 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] disabled:opacity-75 disabled:cursor-not-allowed text-white text-xs font-black flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
                   id="btn-save-banner-adjust"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>LƯU THAY ĐỔI</span>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>ĐANG LƯU...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>LƯU THAY ĐỔI</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

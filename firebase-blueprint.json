@@ -47,9 +47,28 @@
         "userId": { "type": "string" }
       },
       "required": ["id", "title", "url", "categoryId", "userId"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global shared application and banner configuration",
+      "type": "object",
+      "properties": {
+        "posX": { "type": "number" },
+        "posY": { "type": "number" },
+        "scale": { "type": "number" },
+        "marginTop": { "type": "number" },
+        "marginBottom": { "type": "number" },
+        "bgUrl": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["posX", "posY", "scale"]
     }
   },
   "firestore": {
+    "app_config/{configId}": {
+      "schema": "AppConfig",
+      "description": "Global application configuration accessible to viewers and admins"
+    },
     "users/{userId}": {
       "schema": "UserSetting",
       "description": "Collection of user-specific settings documents"

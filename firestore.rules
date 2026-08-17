@@ -44,6 +44,23 @@ service cloud.firestore {
           && data.viewsCount is int;
     }
 
+    function isValidBannerConfig(data) {
+      return data.posX is number && data.posX >= 0 && data.posX <= 100
+          && data.posY is number && data.posY >= 0 && data.posY <= 100
+          && data.scale is number && data.scale >= 80 && data.scale <= 300
+          && (!('marginTop' in data) || (data.marginTop is number && data.marginTop >= 0 && data.marginTop <= 100))
+          && (!('marginBottom' in data) || (data.marginBottom is number && data.marginBottom >= 0 && data.marginBottom <= 100))
+          && (!('bgUrl' in data) || data.bgUrl == null || (data.bgUrl is string && data.bgUrl.size() < 1048576))
+          && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    // Match global app config (shared across all viewers & admins)
+    match /app_config/{configId} {
+      allow read, get, list: if true;
+      allow create, update: if isValidBannerConfig(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
     // Match users collection
     match /users/{userId} {
       allow get: if isSignedIn() && isOwner(userId);

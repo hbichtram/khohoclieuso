@@ -93,20 +93,50 @@ export default function App() {
     setAvatarUrl(null);
   };
 
-  // Banner Background state & Position Configuration
-  const [bannerBgUrl, setBannerBgUrl] = useState<string | null>(() => settings.bannerBgUrl || StorageService.getBanner());
-  const [bannerConfig, setBannerConfig] = useState<BannerConfig>(() => settings.bannerConfig || StorageService.getBannerConfig());
+  // Banner Background state & Position Configuration (Shared between Admin & Viewer)
+  const [bannerBgUrl, setBannerBgUrl] = useState<string | null>(() => StorageService.getBanner() || settings.bannerBgUrl || null);
+  const [bannerConfig, setBannerConfig] = useState<BannerConfig>(() => StorageService.getBannerConfig());
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
 
-  // Synchronize banner if settings change (e.g. from cloud sync)
+  // 1. Realtime Shared App & Banner Configuration listener (runs for BOTH Admin & Viewer)
   useEffect(() => {
-    if (settings.bannerBgUrl !== undefined) {
-      setBannerBgUrl(settings.bannerBgUrl);
-    }
-    if (settings.bannerConfig !== undefined) {
-      setBannerConfig(settings.bannerConfig);
-    }
-  }, [settings.bannerBgUrl, settings.bannerConfig]);
+    if (!isConfigured || !db) return;
+
+    const bannerDocRef = doc(db, 'app_config', 'banner');
+    const unsubSharedBanner = onSnapshot(
+      bannerDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const cloudConfig: BannerConfig = {
+            posX: typeof data.posX === 'number' ? data.posX : 50,
+            posY: typeof data.posY === 'number' ? data.posY : 50,
+            scale: typeof data.scale === 'number' ? data.scale : 100,
+            marginTop: typeof data.marginTop === 'number' ? data.marginTop : 0,
+            marginBottom: typeof data.marginBottom === 'number' ? data.marginBottom : 24,
+            bgUrl: data.bgUrl !== undefined ? data.bgUrl : null,
+          };
+          const cloudBgUrl = data.bgUrl || null;
+
+          setBannerConfig(cloudConfig);
+          setBannerBgUrl(cloudBgUrl);
+
+          // Update local cache so offline/subsequent reloads are instantaneous
+          StorageService.saveBannerConfig(cloudConfig);
+          if (cloudBgUrl) {
+            StorageService.saveBanner(cloudBgUrl);
+          } else {
+            StorageService.deleteBanner();
+          }
+        }
+      },
+      (error) => {
+        console.warn('Could not sync shared banner config from Firestore:', error);
+      }
+    );
+
+    return () => unsubSharedBanner();
+  }, []);
 
   const handleOpenBannerModal = () => {
     if (role !== 'admin') {
@@ -116,62 +146,150 @@ export default function App() {
     setIsBannerModalOpen(true);
   };
 
-  const handleSaveBannerConfig = (newConfig: BannerConfig, newImageDataUrl?: string | null) => {
+  const handleSaveBannerConfig = async (newConfig: BannerConfig, newImageDataUrl?: string | null) => {
     if (role !== 'admin') {
       handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
       return;
     }
 
     const finalUrl = newImageDataUrl !== undefined ? newImageDataUrl : (newConfig.bgUrl ?? bannerBgUrl);
-    if (newImageDataUrl) {
-      StorageService.saveBanner(newImageDataUrl);
-      setBannerBgUrl(newImageDataUrl);
-    }
-
     const updatedConfig: BannerConfig = {
       ...newConfig,
       bgUrl: finalUrl,
     };
 
-    StorageService.saveBannerConfig(updatedConfig);
-    setBannerConfig(updatedConfig);
-    handleUpdateSettings({
-      ...settings,
-      bannerBgUrl: finalUrl,
-      bannerConfig: updatedConfig,
-    });
-    handleAddToast('Đã lưu vị trí Banner thành công.', 'success');
+    try {
+      // 1. Write to Shared Firestore Document first (shared across all devices & viewers)
+      if (isConfigured && db) {
+        const bannerDocRef = doc(db, 'app_config', 'banner');
+        await setDoc(bannerDocRef, {
+          posX: updatedConfig.posX ?? 50,
+          posY: updatedConfig.posY ?? 50,
+          scale: updatedConfig.scale ?? 100,
+          marginTop: updatedConfig.marginTop ?? 0,
+          marginBottom: updatedConfig.marginBottom ?? 24,
+          bgUrl: finalUrl || null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      // 2. Persist locally to storage cache
+      StorageService.saveBannerConfig(updatedConfig);
+      if (finalUrl) {
+        StorageService.saveBanner(finalUrl);
+      } else {
+        StorageService.deleteBanner();
+      }
+
+      // 3. Update local React state
+      setBannerBgUrl(finalUrl);
+      setBannerConfig(updatedConfig);
+
+      const updatedSettings: Settings = {
+        ...settings,
+        bannerBgUrl: finalUrl,
+        bannerConfig: updatedConfig,
+      };
+      setSettings(updatedSettings);
+      StorageService.saveSettings(updatedSettings);
+
+      if (user && db) {
+        await setDoc(doc(db, 'users', user.uid), updatedSettings).catch(() => {});
+      }
+
+      // 4. Notify success ONLY after real write succeeds
+      handleAddToast('Đã lưu vị trí Banner thành công.', 'success');
+    } catch (error) {
+      console.error('Lỗi khi lưu cấu hình Banner:', error);
+      handleAddToast('Không thể lưu vị trí Banner. Vui lòng thử lại.', 'error');
+      throw error;
+    }
   };
 
-  const handleDeleteBanner = () => {
+  const handleDeleteBanner = async () => {
     if (role !== 'admin') {
       handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
       return;
     }
-    StorageService.deleteBanner();
-    setBannerBgUrl(null);
-    const resetConfig: BannerConfig = { ...bannerConfig, bgUrl: null };
-    StorageService.saveBannerConfig(resetConfig);
-    setBannerConfig(resetConfig);
-    handleUpdateSettings({ ...settings, bannerBgUrl: null, bannerConfig: resetConfig });
-    handleAddToast('Đã xóa ảnh Banner tùy chỉnh và khôi phục Banner mặc định.', 'success');
+    try {
+      const resetConfig: BannerConfig = { ...bannerConfig, bgUrl: null };
+
+      if (isConfigured && db) {
+        const bannerDocRef = doc(db, 'app_config', 'banner');
+        await setDoc(bannerDocRef, {
+          posX: resetConfig.posX ?? 50,
+          posY: resetConfig.posY ?? 50,
+          scale: resetConfig.scale ?? 100,
+          marginTop: resetConfig.marginTop ?? 0,
+          marginBottom: resetConfig.marginBottom ?? 24,
+          bgUrl: null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      StorageService.deleteBanner();
+      StorageService.saveBannerConfig(resetConfig);
+      setBannerBgUrl(null);
+      setBannerConfig(resetConfig);
+
+      const updatedSettings = { ...settings, bannerBgUrl: null, bannerConfig: resetConfig };
+      setSettings(updatedSettings);
+      StorageService.saveSettings(updatedSettings);
+
+      if (user && db) {
+        await setDoc(doc(db, 'users', user.uid), updatedSettings).catch(() => {});
+      }
+
+      handleAddToast('Đã xóa ảnh Banner tùy chỉnh và khôi phục Banner mặc định.', 'success');
+    } catch (error) {
+      console.error('Lỗi khi xóa Banner:', error);
+      handleAddToast('Không thể xóa ảnh Banner. Vui lòng thử lại.', 'error');
+      throw error;
+    }
   };
 
-  const handleRestoreDefaultBanner = () => {
+  const handleRestoreDefaultBanner = async () => {
     if (role !== 'admin') {
       handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
       return;
     }
-    StorageService.deleteBanner();
-    StorageService.deleteBannerConfig();
-    setBannerBgUrl(null);
-    setBannerConfig(DEFAULT_BANNER_CONFIG);
-    handleUpdateSettings({
-      ...settings,
-      bannerBgUrl: null,
-      bannerConfig: DEFAULT_BANNER_CONFIG,
-    });
-    handleAddToast('Đã khôi phục toàn bộ Banner và vị trí về mặc định.', 'success');
+    try {
+      if (isConfigured && db) {
+        const bannerDocRef = doc(db, 'app_config', 'banner');
+        await setDoc(bannerDocRef, {
+          posX: DEFAULT_BANNER_CONFIG.posX,
+          posY: DEFAULT_BANNER_CONFIG.posY,
+          scale: DEFAULT_BANNER_CONFIG.scale,
+          marginTop: DEFAULT_BANNER_CONFIG.marginTop ?? 0,
+          marginBottom: DEFAULT_BANNER_CONFIG.marginBottom ?? 24,
+          bgUrl: null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      StorageService.deleteBanner();
+      StorageService.deleteBannerConfig();
+      setBannerBgUrl(null);
+      setBannerConfig(DEFAULT_BANNER_CONFIG);
+
+      const updatedSettings: Settings = {
+        ...settings,
+        bannerBgUrl: null,
+        bannerConfig: DEFAULT_BANNER_CONFIG,
+      };
+      setSettings(updatedSettings);
+      StorageService.saveSettings(updatedSettings);
+
+      if (user && db) {
+        await setDoc(doc(db, 'users', user.uid), updatedSettings).catch(() => {});
+      }
+
+      handleAddToast('Đã khôi phục toàn bộ Banner và vị trí về mặc định.', 'success');
+    } catch (error) {
+      console.error('Lỗi khi khôi phục Banner:', error);
+      handleAddToast('Không thể khôi phục Banner mặc định. Vui lòng thử lại.', 'error');
+      throw error;
+    }
   };
 
   const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
