@@ -28,6 +28,49 @@ interface BannerModalProps {
   onAddToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
+// Helper to compress image to lightweight base64 (Max 1600x600, ~100-200 KB) for ultra-fast Firestore sync
+const compressBannerImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 1600;
+        const maxHeight = 600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // Try webp first, fallback to jpeg
+        let resultUrl = canvas.toDataURL('image/webp', 0.85);
+        if (!resultUrl || !resultUrl.startsWith('data:image/webp')) {
+          resultUrl = canvas.toDataURL('image/jpeg', 0.85);
+        }
+        resolve(resultUrl);
+      };
+      img.onerror = () => reject(new Error('Không thể tải dữ liệu ảnh'));
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Không thể đọc tệp hình ảnh'));
+    reader.readAsDataURL(file);
+  });
+};
+
 export const BannerModal: React.FC<BannerModalProps> = ({
   isOpen,
   onClose,
@@ -107,30 +150,23 @@ export const BannerModal: React.FC<BannerModalProps> = ({
 
     setIsUploading(true);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        setPendingFileUrl(dataUrl);
+    compressBannerImage(file)
+      .then((compressedUrl) => {
+        setPendingFileUrl(compressedUrl);
         setIsUploading(false);
         // Reset to center for new image
         setPosX(50);
         setPosY(50);
         setScale(100);
         onAddToast('Đã tải ảnh lên! Hãy dùng chuột nhấn giữ và kéo ảnh để căn vị trí.', 'info');
-      } else {
+      })
+      .catch(() => {
         setIsUploading(false);
-        onAddToast('Không thể đọc tệp hình ảnh. Vui lòng thử lại.', 'error');
-      }
-    };
-
-    reader.onerror = () => {
-      setIsUploading(false);
-      onAddToast('Không thể tải ảnh. Vui lòng thử lại.', 'error');
-    };
-
-    reader.readAsDataURL(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+        onAddToast('Không thể xử lý tệp hình ảnh. Vui lòng thử lại.', 'error');
+      })
+      .finally(() => {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      });
   };
 
   // Direct Mouse / Touch Dragging Handlers
@@ -494,10 +530,32 @@ export const BannerModal: React.FC<BannerModalProps> = ({
                         </>
                       ) : (
                         /* System Default CSS Banner when no custom image is loaded */
-                        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600">
-                          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:20px_20px]" />
-                          <div className="absolute top-0 left-1/4 w-80 h-80 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
-                          <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
+                        <div 
+                          className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600"
+                          style={{
+                            transform: `scale(${scale / 100})`,
+                            transformOrigin: `${posX}% ${posY}%`,
+                            transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+                          }}
+                        >
+                          <div 
+                            className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:20px_20px]" 
+                            style={{
+                              backgroundPosition: `${posX}% ${posY}%`,
+                            }}
+                          />
+                          <div 
+                            className="absolute top-0 left-1/4 w-80 h-80 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" 
+                            style={{
+                              transform: `translate(${(posX - 50) * 1.5}px, ${(posY - 50) * 1.5}px)`,
+                            }}
+                          />
+                          <div 
+                            className="absolute bottom-0 right-1/4 w-80 h-80 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" 
+                            style={{
+                              transform: `translate(${(posX - 50) * 1.5}px, ${(posY - 50) * 1.5}px)`,
+                            }}
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/10" />
                         </div>
                       )}

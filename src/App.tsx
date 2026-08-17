@@ -1283,10 +1283,31 @@ export default function App() {
                   </>
                 ) : (
                   /* Abstract Glowing Atmosphere Overlay - Pure CSS default banner */
-                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600">
-                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px]" />
-                    <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
-                    <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
+                  <div 
+                    className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600 transition-transform duration-100 ease-out"
+                    style={{
+                      transform: `scale(${(bannerConfig.scale ?? 100) / 100})`,
+                      transformOrigin: `${bannerConfig.posX ?? 50}% ${bannerConfig.posY ?? 50}%`,
+                    }}
+                  >
+                    <div 
+                      className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px]" 
+                      style={{
+                        backgroundPosition: `${bannerConfig.posX ?? 50}% ${bannerConfig.posY ?? 50}%`,
+                      }}
+                    />
+                    <div 
+                      className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" 
+                      style={{
+                        transform: `translate(${((bannerConfig.posX ?? 50) - 50) * 1.5}px, ${((bannerConfig.posY ?? 50) - 50) * 1.5}px)`,
+                      }}
+                    />
+                    <div 
+                      className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" 
+                      style={{
+                        transform: `translate(${((bannerConfig.posX ?? 50) - 50) * 1.5}px, ${((bannerConfig.posY ?? 50) - 50) * 1.5}px)`,
+                      }}
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/10" />
                   </div>
                 )}
