@@ -12,6 +12,7 @@ interface LearningPortalProps {
   onSelectSubCategory: (subCatId: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null) => void;
   onSelectCategory: (catId: string | null) => void;
   onChangeFilter: (filter: 'all' | 'favorites' | 'pinned') => void;
+  onOpenGradeLibrary: (grade: 'tinhoc3' | 'tinhoc4' | 'tinhoc5') => void;
 }
 
 export const LearningPortal: React.FC<LearningPortalProps> = ({
@@ -23,6 +24,7 @@ export const LearningPortal: React.FC<LearningPortalProps> = ({
   onSelectSubCategory,
   onSelectCategory,
   onChangeFilter,
+  onOpenGradeLibrary,
 }) => {
   // Find matching categories
   const gameCategory = categories.find(
@@ -66,36 +68,15 @@ export const LearningPortal: React.FC<LearningPortalProps> = ({
 
   // Handlers for cards
   const handleOpenTinHoc3 = () => {
-    onChangeFilter('all');
-    if (elearningCategory) {
-      onSelectCategory(elearningCategory.id);
-    } else {
-      onSelectCategory('cat-work');
-    }
-    onSelectSubCategory('tinhoc3');
-    scrollToLinksSection();
+    onOpenGradeLibrary('tinhoc3');
   };
 
   const handleOpenTinHoc4 = () => {
-    onChangeFilter('all');
-    if (elearningCategory) {
-      onSelectCategory(elearningCategory.id);
-    } else {
-      onSelectCategory('cat-work');
-    }
-    onSelectSubCategory('tinhoc4');
-    scrollToLinksSection();
+    onOpenGradeLibrary('tinhoc4');
   };
 
   const handleOpenTinHoc5 = () => {
-    onChangeFilter('all');
-    if (elearningCategory) {
-      onSelectCategory(elearningCategory.id);
-    } else {
-      onSelectCategory('cat-work');
-    }
-    onSelectSubCategory('tinhoc5');
-    scrollToLinksSection();
+    onOpenGradeLibrary('tinhoc5');
   };
 
   const handleOpenGames = () => {

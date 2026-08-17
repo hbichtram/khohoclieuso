@@ -32,6 +32,7 @@ import { AvatarModal } from './components/AvatarModal';
 import { Dashboard } from './components/Dashboard';
 import { SubFolderView } from './components/SubFolderView';
 import { LearningPortal } from './components/LearningPortal';
+import { GradeLibraryView } from './components/GradeLibraryView';
 import { Toast } from './components/Toast';
 
 import { 
@@ -120,9 +121,63 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'pinned' | 'dashboard'>('all');
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [activeSubCategoryId, setActiveSubCategoryId] = useState<'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null>(null);
+  const [activeGradeLibrary, setActiveGradeLibrary] = useState<'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'titleAZ' | 'titleZA' | 'viewsCount'>('createdAt');
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Grade Library Navigation handlers
+  const handleOpenGradeLibrary = (grade: 'tinhoc3' | 'tinhoc4' | 'tinhoc5') => {
+    setActiveGradeLibrary(grade);
+    setActiveCategoryId('cat-work');
+    setActiveSubCategoryId(grade);
+    setActiveFilter('all');
+    const gradeSlug = grade === 'tinhoc3' ? 'tin-hoc-3' : grade === 'tinhoc4' ? 'tin-hoc-4' : 'tin-hoc-5';
+    window.location.hash = `#/${gradeSlug}`;
+    const scrollArea = document.getElementById('scrollable-content-area');
+    if (scrollArea) scrollArea.scrollTop = 0;
+  };
+
+  const handleBackToPortal = () => {
+    setActiveGradeLibrary(null);
+    setActiveCategoryId(null);
+    setActiveSubCategoryId(null);
+    setActiveFilter('all');
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    const scrollArea = document.getElementById('scrollable-content-area');
+    if (scrollArea) scrollArea.scrollTop = 0;
+  };
+
+  // Sync hash changes with navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.toLowerCase();
+      if (hash === '#/tin-hoc-3' || hash === '#tin-hoc-3' || hash === '#tinhoc3') {
+        setActiveGradeLibrary('tinhoc3');
+        setActiveCategoryId('cat-work');
+        setActiveSubCategoryId('tinhoc3');
+        setActiveFilter('all');
+      } else if (hash === '#/tin-hoc-4' || hash === '#tin-hoc-4' || hash === '#tinhoc4') {
+        setActiveGradeLibrary('tinhoc4');
+        setActiveCategoryId('cat-work');
+        setActiveSubCategoryId('tinhoc4');
+        setActiveFilter('all');
+      } else if (hash === '#/tin-hoc-5' || hash === '#tin-hoc-5' || hash === '#tinhoc5') {
+        setActiveGradeLibrary('tinhoc5');
+        setActiveCategoryId('cat-work');
+        setActiveSubCategoryId('tinhoc5');
+        setActiveFilter('all');
+      } else if (hash === '' || hash === '#/' || hash === '#') {
+        setActiveGradeLibrary(null);
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // Modal open states
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
@@ -823,14 +878,29 @@ export default function App() {
           setActiveCategoryId(id);
           setActiveFilter('all');
           setActiveSubCategoryId(null); // Reset subcategory when main category is changed
+          setActiveGradeLibrary(null);
+          if (window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
         }}
         activeSubCategoryId={activeSubCategoryId}
-        onSelectSubCategory={setActiveSubCategoryId}
+        onSelectSubCategory={(subId) => {
+          setActiveSubCategoryId(subId);
+          if (subId === 'tinhoc3' || subId === 'tinhoc4' || subId === 'tinhoc5') {
+            handleOpenGradeLibrary(subId);
+          } else {
+            setActiveGradeLibrary(null);
+          }
+        }}
         activeFilter={activeFilter}
         onChangeFilter={(filter) => {
           setActiveFilter(filter);
           setActiveCategoryId(null);
           setActiveSubCategoryId(null); // Reset subcategory when filter changes
+          setActiveGradeLibrary(null);
+          if (window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
         }}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
@@ -934,7 +1004,33 @@ export default function App() {
 
         {/* Content Box */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6" id="scrollable-content-area">
-          {activeFilter === 'dashboard' ? (
+          {activeGradeLibrary ? (
+            /* DEDICATED GRADE LIBRARY VIEW (TIN HỌC 3, 4, 5) */
+            <GradeLibraryView
+              grade={activeGradeLibrary}
+              links={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
+              category={categories.find(c => c.id === 'cat-work' || c.id === 'cat-tech' || c.name.toLowerCase().includes('e-learning'))}
+              role={role}
+              settings={settings}
+              onBack={handleBackToPortal}
+              onOpenLink={(link) => handleIncrementViews(link.id)}
+              onEditLink={(link) => {
+                setEditingLink(link);
+                setIsAddEditOpen(true);
+              }}
+              onDeleteLink={(link) => {
+                setDeletingLink(link);
+                setIsDeleteConfirmOpen(true);
+              }}
+              onAddLink={() => {
+                setEditingLink(null);
+                setIsAddEditOpen(true);
+              }}
+              onToggleFavorite={handleToggleFavorite}
+              onTogglePinned={handleTogglePinned}
+              onAddToast={handleAddToast}
+            />
+          ) : activeFilter === 'dashboard' ? (
             /* Statistical View Dashboard panel */
             <div className="max-w-6xl mx-auto">
               <div className="flex items-center justify-between mb-4">
@@ -992,6 +1088,7 @@ export default function App() {
                 onSelectSubCategory={setActiveSubCategoryId}
                 onSelectCategory={setActiveCategoryId}
                 onChangeFilter={setActiveFilter}
+                onOpenGradeLibrary={handleOpenGradeLibrary}
               />
 
               <div id="links-directory-section"></div>
@@ -1094,7 +1191,13 @@ export default function App() {
                 <SubFolderView
                   links={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
                   role={role}
-                  onSelectSubCategory={setActiveSubCategoryId}
+                  onSelectSubCategory={(subId) => {
+                    if (subId) {
+                      handleOpenGradeLibrary(subId as any);
+                    } else {
+                      setActiveSubCategoryId(null);
+                    }
+                  }}
                 />
               ) : filteredLinks.length === 0 ? (
                 /* Empty state screen placeholder */
@@ -1205,8 +1308,8 @@ export default function App() {
         editingLink={editingLink}
         onAddToast={handleAddToast}
         links={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
-        defaultCategoryId={activeCategoryId || 'cat-work'}
-        defaultSubCategoryId={activeSubCategoryId}
+        defaultCategoryId={activeGradeLibrary ? 'cat-work' : (activeCategoryId || 'cat-work')}
+        defaultSubCategoryId={activeGradeLibrary || activeSubCategoryId || undefined}
       />
 
       {/* 2. Manage Categories Modal */}
