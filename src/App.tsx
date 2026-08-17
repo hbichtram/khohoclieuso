@@ -21,7 +21,7 @@ import {
   Camera,
 } from 'lucide-react';
 
-import { LinkItem, Category, Settings, ToastMessage } from './types';
+import { LinkItem, Category, Settings, ToastMessage, BannerConfig, DEFAULT_BANNER_CONFIG } from './types';
 import { StorageService } from './storage';
 import { Sidebar } from './components/Sidebar';
 import { LinkCard } from './components/LinkCard';
@@ -93,8 +93,9 @@ export default function App() {
     setAvatarUrl(null);
   };
 
-  // Banner Background state
+  // Banner Background state & Position Configuration
   const [bannerBgUrl, setBannerBgUrl] = useState<string | null>(() => settings.bannerBgUrl || StorageService.getBanner());
+  const [bannerConfig, setBannerConfig] = useState<BannerConfig>(() => settings.bannerConfig || StorageService.getBannerConfig());
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
 
   // Synchronize banner if settings change (e.g. from cloud sync)
@@ -102,25 +103,44 @@ export default function App() {
     if (settings.bannerBgUrl !== undefined) {
       setBannerBgUrl(settings.bannerBgUrl);
     }
-  }, [settings.bannerBgUrl]);
+    if (settings.bannerConfig !== undefined) {
+      setBannerConfig(settings.bannerConfig);
+    }
+  }, [settings.bannerBgUrl, settings.bannerConfig]);
 
   const handleOpenBannerModal = () => {
     if (role !== 'admin') {
-      handleAddToast('Chỉ tài khoản Quản trị mới có quyền quản lý ảnh nền Banner!', 'error');
+      handleAddToast('Chỉ tài khoản Quản trị mới có quyền quản lý và điều chỉnh Banner!', 'error');
       return;
     }
     setIsBannerModalOpen(true);
   };
 
-  const handleSaveBanner = (newBannerDataUrl: string) => {
+  const handleSaveBannerConfig = (newConfig: BannerConfig, newImageDataUrl?: string | null) => {
     if (role !== 'admin') {
       handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
       return;
     }
-    StorageService.saveBanner(newBannerDataUrl);
-    setBannerBgUrl(newBannerDataUrl);
-    handleUpdateSettings({ ...settings, bannerBgUrl: newBannerDataUrl });
-    handleAddToast('Đã cập nhật Banner thành công.', 'success');
+
+    const finalUrl = newImageDataUrl !== undefined ? newImageDataUrl : (newConfig.bgUrl ?? bannerBgUrl);
+    if (newImageDataUrl) {
+      StorageService.saveBanner(newImageDataUrl);
+      setBannerBgUrl(newImageDataUrl);
+    }
+
+    const updatedConfig: BannerConfig = {
+      ...newConfig,
+      bgUrl: finalUrl,
+    };
+
+    StorageService.saveBannerConfig(updatedConfig);
+    setBannerConfig(updatedConfig);
+    handleUpdateSettings({
+      ...settings,
+      bannerBgUrl: finalUrl,
+      bannerConfig: updatedConfig,
+    });
+    handleAddToast('Đã lưu cấu hình và vị trí Banner thành công.', 'success');
   };
 
   const handleDeleteBanner = () => {
@@ -130,7 +150,11 @@ export default function App() {
     }
     StorageService.deleteBanner();
     setBannerBgUrl(null);
-    handleUpdateSettings({ ...settings, bannerBgUrl: null });
+    const resetConfig: BannerConfig = { ...bannerConfig, bgUrl: null };
+    StorageService.saveBannerConfig(resetConfig);
+    setBannerConfig(resetConfig);
+    handleUpdateSettings({ ...settings, bannerBgUrl: null, bannerConfig: resetConfig });
+    handleAddToast('Đã xóa ảnh Banner tùy chỉnh và khôi phục Banner mặc định.', 'success');
   };
 
   const handleRestoreDefaultBanner = () => {
@@ -139,8 +163,15 @@ export default function App() {
       return;
     }
     StorageService.deleteBanner();
+    StorageService.deleteBannerConfig();
     setBannerBgUrl(null);
-    handleUpdateSettings({ ...settings, bannerBgUrl: null });
+    setBannerConfig(DEFAULT_BANNER_CONFIG);
+    handleUpdateSettings({
+      ...settings,
+      bannerBgUrl: null,
+      bannerConfig: DEFAULT_BANNER_CONFIG,
+    });
+    handleAddToast('Đã khôi phục toàn bộ Banner và vị trí về mặc định.', 'success');
   };
 
   const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
@@ -1107,29 +1138,34 @@ export default function App() {
             <div className="max-w-6xl mx-auto space-y-6">
               {/* Clean Digital Learning Portal Banner ("HỌC LIỆU SỐ MÔN TIN HỌC" & "Kết nối tri thức - Chạm tới tương lai") */}
               <div 
-                className={`relative rounded-[24px] overflow-hidden shadow-lg border border-blue-200/50 dark:border-blue-900/30 text-white min-h-[170px] md:min-h-[190px] p-6 md:p-8 flex flex-col items-center justify-center text-center transition-all ${
-                  bannerBgUrl
-                    ? 'bg-zinc-900'
-                    : 'bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600'
-                }`}
-                style={
-                  bannerBgUrl
-                    ? {
-                        backgroundImage: `url(${bannerBgUrl})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                      }
-                    : undefined
-                }
+                className="relative rounded-[24px] overflow-hidden shadow-lg border border-blue-200/50 dark:border-blue-900/30 text-white min-h-[170px] md:min-h-[190px] p-6 md:p-8 flex flex-col items-center justify-center text-center transition-all bg-zinc-900"
+                style={{
+                  marginTop: `${bannerConfig.marginTop ?? 0}px`,
+                  marginBottom: `${bannerConfig.marginBottom ?? 24}px`,
+                }}
                 id="slogan-banner"
               >
-                {/* Background Overlay Layer */}
+                {/* Background Layer with Live Position & Zoom */}
                 {bannerBgUrl ? (
-                  /* Custom image protection overlay - ensures text legibility on all photo backgrounds */
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/35 to-black/45 backdrop-blur-[0.5px]" />
+                  <>
+                    {/* Custom Image Background Layer with Position & Scale */}
+                    <div
+                      className="absolute inset-0 z-0 transition-transform duration-100 ease-out"
+                      style={{
+                        backgroundImage: `url(${bannerBgUrl})`,
+                        backgroundPosition: `${bannerConfig.posX ?? 50}% ${bannerConfig.posY ?? 50}%`,
+                        backgroundSize: 'cover',
+                        backgroundRepeat: 'no-repeat',
+                        transform: `scale(${(bannerConfig.scale ?? 100) / 100})`,
+                        transformOrigin: `${bannerConfig.posX ?? 50}% ${bannerConfig.posY ?? 50}%`,
+                      }}
+                    />
+                    {/* Custom image protection overlay - ensures text legibility on all photo backgrounds */}
+                    <div className="absolute inset-0 z-1 bg-gradient-to-t from-black/60 via-black/35 to-black/45 backdrop-blur-[0.5px]" />
+                  </>
                 ) : (
                   /* Abstract Glowing Atmosphere Overlay - Pure CSS default banner */
-                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600">
                     <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px]" />
                     <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
                     <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
@@ -1143,7 +1179,7 @@ export default function App() {
                     type="button"
                     onClick={handleOpenBannerModal}
                     className="absolute top-3.5 right-3.5 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/40 hover:bg-black/60 active:scale-[0.98] text-white/90 hover:text-white backdrop-blur-md text-xs font-bold border border-white/20 transition-all cursor-pointer shadow-sm"
-                    title="Tùy chỉnh ảnh nền Banner (Chỉ Quản trị viên)"
+                    title="Tùy chỉnh ảnh nền & Vị trí Banner (Chỉ Quản trị viên)"
                     id="btn-quick-manage-banner"
                   >
                     <Camera className="w-3.5 h-3.5 text-cyan-300" />
@@ -1151,8 +1187,8 @@ export default function App() {
                   </button>
                 )}
                 
-                {/* Center Content */}
-                <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-3.5 select-none">
+                {/* Center Content (Strictly Fixed & Centered) */}
+                <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-3.5 select-none pointer-events-none">
                   <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-sans">
                     HỌC LIỆU SỐ MÔN TIN HỌC
                   </h1>
@@ -1436,13 +1472,14 @@ export default function App() {
         onAddToast={handleAddToast}
       />
 
-      {/* 6. Banner Background Image Management Modal (Admin Only) */}
+      {/* 6. Banner Background Image & Position Management Modal (Admin Only) */}
       <BannerModal
         isOpen={isBannerModalOpen}
         onClose={() => setIsBannerModalOpen(false)}
         role={role}
+        bannerConfig={bannerConfig}
         currentBannerUrl={bannerBgUrl}
-        onSaveBanner={handleSaveBanner}
+        onSaveBannerConfig={handleSaveBannerConfig}
         onDeleteBanner={handleDeleteBanner}
         onRestoreDefaultBanner={handleRestoreDefaultBanner}
         onAddToast={handleAddToast}

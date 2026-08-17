@@ -31,6 +31,24 @@ export interface LinkItem {
   order?: number; // Custom drag/sort ordering for teachers
 }
 
+export interface BannerConfig {
+  bgUrl?: string | null;
+  posX: number; // Horizontal position: 0% (Left) to 100% (Right), default: 50%
+  posY: number; // Vertical position: 0% (Top) to 100% (Bottom), default: 50%
+  scale: number; // Scale / Zoom: 80% to 200%, default: 100%
+  marginTop: number; // Top spacing in px (0 - 48), default: 0
+  marginBottom: number; // Bottom spacing in px (0 - 48), default: 24
+}
+
+export const DEFAULT_BANNER_CONFIG: BannerConfig = {
+  bgUrl: null,
+  posX: 50,
+  posY: 50,
+  scale: 100,
+  marginTop: 0,
+  marginBottom: 24,
+};
+
 export interface Settings {
   theme: 'light' | 'dark';
   primaryColor: string; // Accent color hex (e.g., "#3B82F6", "#EF4444", "#10B981")
@@ -38,6 +56,7 @@ export interface Settings {
   layout: 'grid' | 'list';
   itemsPerPage: number;
   bannerBgUrl?: string | null;
+  bannerConfig?: BannerConfig;
 }
 
 export interface ToastMessage {

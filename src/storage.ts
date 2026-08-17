@@ -1,4 +1,4 @@
-import { Category, LinkItem, Settings, DEFAULT_CATEGORIES } from './types';
+import { Category, LinkItem, Settings, DEFAULT_CATEGORIES, BannerConfig, DEFAULT_BANNER_CONFIG } from './types';
 
 const STORAGE_KEYS = {
   LINKS: 'link_manager_links',
@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'link_manager_settings',
   AVATAR: 'link_manager_teacher_avatar',
   BANNER: 'link_manager_banner_bg',
+  BANNER_CONFIG: 'link_manager_banner_config',
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: Settings = {
   animationsEnabled: true,
   layout: 'grid',
   itemsPerPage: 12,
+  bannerConfig: DEFAULT_BANNER_CONFIG,
 };
 
 export const isValidUrl = (url: string): boolean => {
@@ -521,6 +523,35 @@ export const StorageService = {
       localStorage.removeItem(STORAGE_KEYS.BANNER);
     } catch (e) {
       console.error('Lỗi khi xóa ảnh nền banner', e);
+    }
+  },
+
+  // Banner Position & Scale Configuration Management
+  getBannerConfig(): BannerConfig {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.BANNER_CONFIG);
+      if (!data) {
+        return DEFAULT_BANNER_CONFIG;
+      }
+      return { ...DEFAULT_BANNER_CONFIG, ...JSON.parse(data) };
+    } catch (e) {
+      return DEFAULT_BANNER_CONFIG;
+    }
+  },
+
+  saveBannerConfig(config: BannerConfig): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.BANNER_CONFIG, JSON.stringify(config));
+    } catch (e) {
+      console.error('Lỗi khi lưu cấu hình vị trí banner', e);
+    }
+  },
+
+  deleteBannerConfig(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.BANNER_CONFIG);
+    } catch (e) {
+      console.error('Lỗi khi xóa cấu hình vị trí banner', e);
     }
   }
 };
