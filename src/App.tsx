@@ -46,8 +46,6 @@ import {
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
 
-const BANNER_AI_IMAGE = 'https://images.unsplash.com/photo-1677442136019-21780efad99a?auto=format&fit=crop&w=1600&q=80';
-
 export default function App() {
   // Load initial configurations from StorageService
   const [links, setLinks] = useState<LinkItem[]>(() => StorageService.getLinks());
@@ -851,51 +849,69 @@ export default function App() {
       {/* Main Workspace Frame */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative z-10" id="workspace-frame">
         {/* Top Header Controls row */}
-        <header className="h-16 glass-header px-6 flex items-center justify-between shrink-0 z-10">
-          <div className="flex items-center gap-3 overflow-hidden flex-1 max-w-md">
-            {/* Realtime Search Input Bar */}
+        <header className="h-16 glass-header px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0 z-10">
+          {/* Left: Logo + App Name */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div
+              style={{ backgroundColor: settings.primaryColor, boxShadow: `0 4px 12px ${settings.primaryColor}30` }}
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-sm"
+            >
+              <Database className="w-4 h-4" />
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="font-extrabold text-xs tracking-wider text-zinc-900 dark:text-white" style={{ color: settings.primaryColor }}>
+                LINK MANAGER
+              </span>
+              <span className="text-[9px] font-semibold text-zinc-400 dark:text-zinc-500">
+                Cổng Học Liệu Số
+              </span>
+            </div>
+          </div>
+
+          {/* Center: Large Realtime Search Input Bar */}
+          <div className="flex-1 max-w-xl mx-auto px-2">
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Tìm kiếm theo tiêu đề, URL, mô tả hoặc danh mục..."
-                className="w-full pl-9 pr-4 h-10 text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary-accent)]/20 placeholder-zinc-450 dark:placeholder-zinc-500 transition-all"
+                className="w-full pl-10 pr-4 h-10 text-xs sm:text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary-accent)]/25 placeholder-zinc-400 dark:placeholder-zinc-500 transition-all shadow-2xs"
                 id="search-input-header"
               />
             </div>
           </div>
 
-          {/* Quick Action buttons */}
-          <div className="flex items-center gap-3">
+          {/* Right: Quick Action buttons */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Role Switcher */}
-            <div className="flex bg-zinc-200/60 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200/30 dark:border-zinc-800/30 backdrop-blur-sm shadow-sm shrink-0">
+            <div className="flex bg-zinc-200/70 dark:bg-zinc-800/70 p-1 rounded-xl border border-zinc-200/50 dark:border-zinc-700/50 backdrop-blur-sm shadow-2xs">
               <button
                 onClick={() => handleToggleRole('admin')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   role === 'admin'
-                    ? 'bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                    ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
                 title="Quyền Quản trị viên (Toàn quyền Sửa, Xóa, Ghim, Thêm mới)"
                 id="header-role-admin-btn"
               >
                 <Shield className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Quản trị</span>
+                <span className="hidden md:inline">Quản trị</span>
               </button>
               <button
                 onClick={() => handleToggleRole('viewer')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   role === 'viewer'
-                    ? 'bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                    ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
                 title="Quyền Người xem (Chỉ xem và tra cứu)"
                 id="header-role-viewer-btn"
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Người xem</span>
+                <span className="hidden md:inline">Người xem</span>
               </button>
             </div>
 
@@ -906,18 +922,18 @@ export default function App() {
                   setIsAddEditOpen(true);
                 }}
                 style={{ backgroundColor: settings.primaryColor, boxShadow: `0 4px 12px ${settings.primaryColor}30` }}
-                className="flex items-center gap-1.5 px-4 h-10 text-white rounded-xl text-xs font-semibold hover:opacity-90 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 px-3 sm:px-4 h-10 text-white rounded-xl text-xs font-bold hover:opacity-90 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shrink-0"
                 id="btn-add-link-header"
               >
                 <Plus className="w-4 h-4" />
-                Thêm liên kết
+                <span className="hidden sm:inline">Thêm liên kết</span>
               </button>
             )}
           </div>
         </header>
 
         {/* Content Box */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6" id="scrollable-content-area">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6" id="scrollable-content-area">
           {activeFilter === 'dashboard' ? (
             /* Statistical View Dashboard panel */
             <div className="max-w-6xl mx-auto">
@@ -940,32 +956,27 @@ export default function App() {
           ) : (
             /* Links Directory Workspace view */
             <div className="max-w-6xl mx-auto space-y-6">
-              {/* Majestic Slogan Banner with AI design ("HỌC LIỆU SỐ MÔN TIN HỌC" & "Kết nối tri thức - Chạm tới tương lai") */}
+              {/* Clean Digital Learning Portal Banner ("HỌC LIỆU SỐ MÔN TIN HỌC" & "Kết nối tri thức - Chạm tới tương lai") */}
               <div 
-                className="relative rounded-3xl overflow-hidden shadow-lg border border-white/10 dark:border-white/5 bg-gradient-to-br from-indigo-950 via-slate-900 to-zinc-950 text-white min-h-[180px] p-8 md:p-10 flex flex-col items-center justify-center text-center transition-all"
+                className="relative rounded-[24px] overflow-hidden shadow-lg border border-blue-200/50 dark:border-blue-900/30 bg-gradient-to-r from-blue-700 via-indigo-600 to-cyan-600 text-white min-h-[170px] md:min-h-[190px] p-6 md:p-8 flex flex-col items-center justify-center text-center transition-all"
                 id="slogan-banner"
               >
-                {/* AI / Futuristic Neural Network Background */}
-                <div className="absolute inset-0 z-0 overflow-hidden">
-                  <img 
-                    src={BANNER_AI_IMAGE} 
-                    alt="AI Cyber Network Background" 
-                    className="w-full h-full object-cover opacity-50 dark:opacity-40 select-none pointer-events-none scale-105" 
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 via-zinc-900/60 to-zinc-950/80" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 to-transparent" />
-                  {/* Subtle dynamic background light */}
-                  <div className="absolute top-1/4 left-1/3 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl" />
-                  <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
+                {/* Abstract Glowing Atmosphere Overlay - Pure CSS, no watermark */}
+                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                  {/* Subtle Grid texture */}
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:24px_24px]" />
+                  {/* Soft luminous radial lights */}
+                  <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-400/25 rounded-full blur-3xl -translate-y-1/2" />
+                  <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-300/20 rounded-full blur-3xl translate-y-1/2" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/10" />
                 </div>
                 
                 {/* Center Content */}
-                <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-6">
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black uppercase tracking-wider bg-gradient-to-r from-white via-cyan-200 to-blue-400 bg-clip-text text-transparent drop-shadow-lg font-sans">
+                <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center space-y-3.5">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black uppercase tracking-wider text-white drop-shadow-md font-sans">
                     HỌC LIỆU SỐ MÔN TIN HỌC
                   </h1>
-                  <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold tracking-tight bg-gradient-to-r from-cyan-300 via-blue-200 to-indigo-300 bg-clip-text text-transparent drop-shadow-md font-sans">
+                  <p className="text-sm sm:text-base md:text-lg lg:text-xl font-bold tracking-normal text-cyan-100/95 drop-shadow-sm font-sans">
                     Kết nối tri thức - Chạm tới tương lai
                   </p>
                 </div>
