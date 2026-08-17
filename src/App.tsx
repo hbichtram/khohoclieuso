@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 import { LinkItem, Category, Settings, ToastMessage, BannerConfig, DEFAULT_BANNER_CONFIG } from './types';
-import { StorageService } from './storage';
+import { StorageService, isValidUrl, normalizeVietnamese } from './storage';
 import { Sidebar } from './components/Sidebar';
 import { LinkCard } from './components/LinkCard';
 import { AddEditModal } from './components/AddEditModal';
@@ -423,6 +423,9 @@ export default function App() {
       } else {
         // Reset to local database when logged out
         setLinks(StorageService.getLinks());
+        setTinhoc3Links(StorageService.getTinHoc3Links());
+        setTinhoc4Links(StorageService.getTinHoc4Links());
+        setTinhoc5Links(StorageService.getTinHoc5Links());
         setCategories(StorageService.getCategories());
         setSettings(StorageService.getSettings());
       }
@@ -862,6 +865,30 @@ export default function App() {
     }
   };
 
+  const handleOpenLink = (link: LinkItem) => {
+    const rawUrl = link?.url?.trim();
+    if (!rawUrl || !isValidUrl(rawUrl)) {
+      handleAddToast('Liên kết bài giảng chưa được cấu hình.', 'error');
+      return;
+    }
+
+    // Increment views
+    handleIncrementViews(link.id);
+
+    // Ensure valid protocol
+    let finalUrl = rawUrl;
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = 'https://' + finalUrl;
+    }
+
+    try {
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      console.error('Error opening link:', e);
+      window.location.href = finalUrl;
+    }
+  };
+
   // Backup Import handlers
   const triggerFileInput = () => {
     fileInputRef.current?.click();
@@ -980,20 +1007,33 @@ export default function App() {
       }
     }
 
-    // Search query matches
+    // Search query matches with Vietnamese accent insensitivity
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+      const rawQ = searchQuery.toLowerCase().trim();
+      const normQ = normalizeVietnamese(searchQuery);
+      const queryWords = normQ.split(/\s+/).filter(Boolean);
       // Resolve category names for search integration
-      const catMap = new Map<string, string>(categories.map((c) => [c.id, c.name.toLowerCase()]));
+      const catMap = new Map<string, string>(categories.map((c) => [c.id, c.name]));
 
       result = result.filter((l) => {
         const catName = catMap.get(l.categoryId) || '';
+        const searchableRaw = [
+          l.title,
+          l.url,
+          l.description,
+          l.notes,
+          catName,
+          l.lesson,
+          l.topic,
+          l.keywords,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        const searchableNorm = normalizeVietnamese(searchableRaw);
+
         return (
-          l.title.toLowerCase().includes(query) ||
-          l.url.toLowerCase().includes(query) ||
-          l.description.toLowerCase().includes(query) ||
-          l.notes.toLowerCase().includes(query) ||
-          catName.includes(query)
+          searchableRaw.includes(rawQ) ||
+          searchableNorm.includes(normQ) ||
+          queryWords.every((w) => searchableNorm.includes(w))
         );
       });
     }
@@ -1215,7 +1255,7 @@ export default function App() {
               role={role}
               settings={settings}
               onBack={handleBackToPortal}
-              onOpenLink={(link) => handleIncrementViews(link.id)}
+              onOpenLink={handleOpenLink}
               onEditLink={(link) => {
                 setEditingLink(link);
                 setIsAddEditOpen(true);

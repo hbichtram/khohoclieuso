@@ -32,6 +32,17 @@ export const isValidUrl = (url: string): boolean => {
   }
 };
 
+export const normalizeVietnamese = (str: string): string => {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .trim();
+};
+
 export const sanitizeInput = (input: string): string => {
   if (!input) return '';
   return input

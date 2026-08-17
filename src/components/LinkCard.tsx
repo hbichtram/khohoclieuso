@@ -19,6 +19,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { LinkItem, Category } from '../types';
+import { isValidUrl } from '../storage';
 
 interface LinkCardProps {
   role: 'admin' | 'viewer';
@@ -62,14 +63,27 @@ export const LinkCard: React.FC<LinkCardProps> = ({
   // Copy url helper
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!link.url || !isValidUrl(link.url)) {
+      onAddToast('Liên kết bài giảng chưa được cấu hình.', 'error');
+      return;
+    }
     navigator.clipboard.writeText(link.url);
     onAddToast('Đã sao chép liên kết vào bộ nhớ tạm!', 'success');
   };
 
   // Open link trigger and view increment
   const handleOpen = () => {
+    const rawUrl = link?.url?.trim();
+    if (!rawUrl || !isValidUrl(rawUrl)) {
+      onAddToast('Liên kết bài giảng chưa được cấu hình.', 'error');
+      return;
+    }
     onIncrementViews(link.id);
-    window.open(link.url, '_blank', 'noopener,noreferrer');
+    let finalUrl = rawUrl;
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = 'https://' + finalUrl;
+    }
+    window.open(finalUrl, '_blank', 'noopener,noreferrer');
   };
 
   // Dynamic colors for label accent borders

@@ -21,8 +21,10 @@ import {
   EyeOff,
   Layers,
   HelpCircle,
+  X,
 } from 'lucide-react';
 import { LinkItem, Category, Settings } from '../types';
+import { normalizeVietnamese, isValidUrl } from '../storage';
 
 interface GradeLibraryViewProps {
   grade: 'tinhoc3' | 'tinhoc4' | 'tinhoc5';
@@ -124,24 +126,52 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
   const gradeLinks = useMemo(() => {
     let list = links.filter((link) => {
       // Must match this grade
-      const matchGrade = link.subCategoryId === grade || (grade === 'tinhoc3' && link.url?.includes('lop-3'));
+      const matchGrade = 
+        link.subCategoryId === grade ||
+        (grade === 'tinhoc3' && (link.url?.includes('lop-3') || link.title?.toLowerCase().includes('lớp 3') || link.title?.toLowerCase().includes('lop 3') || link.lesson?.toLowerCase().includes('lớp 3'))) ||
+        (grade === 'tinhoc4' && (link.url?.includes('lop-4') || link.title?.toLowerCase().includes('lớp 4') || link.title?.toLowerCase().includes('lop 4') || link.lesson?.toLowerCase().includes('lớp 4'))) ||
+        (grade === 'tinhoc5' && (link.url?.includes('lop-5') || link.title?.toLowerCase().includes('lớp 5') || link.title?.toLowerCase().includes('lop 5') || link.lesson?.toLowerCase().includes('lớp 5')));
+        
       if (!matchGrade) return false;
       // Filter out hidden if viewer
       if (role !== 'admin' && link.isHidden) return false;
       return true;
     });
 
-    // Search query filter
+    // Multi-attribute search filter with Vietnamese accent support
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+      const rawQ = searchQuery.toLowerCase().trim();
+      const normQ = normalizeVietnamese(searchQuery);
+      const queryWords = normQ.split(/\s+/).filter(Boolean);
+      const rawWords = rawQ.split(/\s+/).filter(Boolean);
+
+      const categoryName = category?.name || 'Bài giảng E-Learning';
+      const gradeAlias = `Tin học ${config.gradeNum} Lớp ${config.gradeNum} Khối ${config.gradeNum} grade ${config.gradeNum}`;
+
       list = list.filter((l) => {
+        const resourceTypeInfo = l.resourceType && RESOURCE_TYPE_MAP[l.resourceType] ? RESOURCE_TYPE_MAP[l.resourceType].label : '';
+
+        // Combine all searchable attributes
+        const searchableRaw = [
+          l.title,
+          l.description,
+          l.url,
+          categoryName,
+          gradeAlias,
+          l.lesson,
+          l.topic,
+          l.keywords,
+          l.notes,
+          resourceTypeInfo,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        const searchableNorm = normalizeVietnamese(searchableRaw);
+
         return (
-          l.title.toLowerCase().includes(q) ||
-          l.description?.toLowerCase().includes(q) ||
-          l.lesson?.toLowerCase().includes(q) ||
-          l.topic?.toLowerCase().includes(q) ||
-          l.keywords?.toLowerCase().includes(q) ||
-          l.url.toLowerCase().includes(q)
+          searchableRaw.includes(rawQ) ||
+          searchableNorm.includes(normQ) ||
+          queryWords.every((w) => searchableNorm.includes(w)) ||
+          rawWords.every((w) => searchableRaw.includes(w))
         );
       });
     }
@@ -170,12 +200,26 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
     });
 
     return list;
-  }, [links, grade, role, searchQuery, sortBy]);
+  }, [links, grade, role, searchQuery, sortBy, category, config.gradeNum]);
 
   const handleCopy = (e: React.MouseEvent, url: string) => {
     e.stopPropagation();
+    if (!url || !isValidUrl(url)) {
+      onAddToast('Liên kết bài giảng chưa được cấu hình.', 'error');
+      return;
+    }
     navigator.clipboard.writeText(url);
     onAddToast('Đã sao chép liên kết vào bộ nhớ tạm!', 'success');
+  };
+
+  const handleOpenCardLink = (e: React.MouseEvent, link: LinkItem) => {
+    e.stopPropagation();
+    const rawUrl = link?.url?.trim();
+    if (!rawUrl || !isValidUrl(rawUrl)) {
+      onAddToast('Liên kết bài giảng chưa được cấu hình.', 'error');
+      return;
+    }
+    onOpenLink(link);
   };
 
   return (
@@ -262,9 +306,19 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={`Tìm kiếm bài giảng Tin học ${config.gradeNum}...`}
-            className="w-full pl-10 pr-4 h-10 text-xs sm:text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary-accent)]/20 placeholder-zinc-400 dark:placeholder-zinc-500 transition-all shadow-2xs"
+            className="w-full pl-10 pr-9 h-10 text-xs sm:text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary-accent)]/20 placeholder-zinc-400 dark:placeholder-zinc-500 transition-all shadow-2xs"
             id="search-input-grade-library"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+              title="Xóa tìm kiếm"
+              id="btn-clear-search-grade-input"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Filter count & Sorting dropdown */}
@@ -293,44 +347,71 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
 
       {/* CONTENT: EMPTY STATE OR CARDS GRID */}
       {gradeLinks.length === 0 ? (
-        /* Empty State */
-        <div className="p-12 text-center glass-panel rounded-3xl border border-zinc-200/60 dark:border-zinc-800 shadow-sm space-y-4 my-8 animate-fade-in">
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-blue-50 dark:bg-blue-950/40 text-blue-500 flex items-center justify-center text-4xl shadow-inner border border-blue-100 dark:border-blue-900">
-            📚
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100">
-              Chưa có học liệu
-            </h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
-              {config.emptyMessage}
-            </p>
-          </div>
+        /* Empty State: Handle both Search empty and Total empty */
+        searchQuery.trim() ? (
+          <div className="p-12 text-center glass-panel rounded-3xl border border-zinc-200/60 dark:border-zinc-800 shadow-sm space-y-4 my-8 animate-fade-in" id="search-empty-state">
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center text-4xl shadow-inner border border-amber-100 dark:border-amber-900">
+              🔍
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100">
+                Không tìm thấy bài giảng phù hợp.
+              </h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
+                Không tìm thấy kết quả nào khớp với từ khóa <span className="font-bold text-zinc-800 dark:text-zinc-200">"{searchQuery}"</span>. Vui lòng thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc.
+              </p>
+            </div>
 
-          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={onBack}
-              className="px-5 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all cursor-pointer"
-            >
-              ← Quay lại Cổng học liệu
-            </button>
-            {role === 'admin' && (
+            <div className="pt-2 flex justify-center">
               <button
-                onClick={onAddLink}
-                style={{ backgroundColor: config.primaryHex }}
-                className="px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5"
+                onClick={() => setSearchQuery('')}
+                className="px-5 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all cursor-pointer flex items-center gap-2 shadow-sm"
+                id="btn-clear-search-grade"
               >
-                <Plus className="w-4 h-4" />
-                <span>Thêm bài giảng ngay</span>
+                <X className="w-4 h-4" />
+                <span>Xóa từ khóa tìm kiếm</span>
               </button>
-            )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="p-12 text-center glass-panel rounded-3xl border border-zinc-200/60 dark:border-zinc-800 shadow-sm space-y-4 my-8 animate-fade-in" id="library-empty-state">
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-blue-50 dark:bg-blue-950/40 text-blue-500 flex items-center justify-center text-4xl shadow-inner border border-blue-100 dark:border-blue-900">
+              📚
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100">
+                Chưa có học liệu
+              </h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
+                {config.emptyMessage}
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={onBack}
+                className="px-5 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all cursor-pointer"
+              >
+                ← Quay lại Cổng học liệu
+              </button>
+              {role === 'admin' && (
+                <button
+                  onClick={onAddLink}
+                  style={{ backgroundColor: config.primaryHex }}
+                  className="px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Thêm bài giảng ngay</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )
       ) : (
         /* Links Cards Grid */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
           {gradeLinks.map((link, index) => {
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(link.url)}`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(link.url || '')}`;
             const isQrOpen = activeQrModalId === link.id;
 
             return (
@@ -353,7 +434,7 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
                 {/* Cover Image / Thumbnail Preview */}
                 {link.imageUrl ? (
                   <div
-                    onClick={() => onOpenLink(link)}
+                    onClick={(e) => handleOpenCardLink(e, link)}
                     className="relative w-full h-36 mt-1 mb-3 rounded-2xl overflow-hidden cursor-pointer group-hover:opacity-95 transition-all border border-zinc-150 dark:border-zinc-800 shadow-sm shrink-0 bg-zinc-100 dark:bg-zinc-800"
                   >
                     <img
@@ -371,7 +452,7 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
                 ) : (
                   /* Fallback friendly lesson banner */
                   <div
-                    onClick={() => onOpenLink(link)}
+                    onClick={(e) => handleOpenCardLink(e, link)}
                     className={`relative w-full h-24 mt-1 mb-3 rounded-2xl p-3 flex items-center justify-between cursor-pointer transition-all border border-zinc-200/50 dark:border-zinc-700/40 shadow-2xs shrink-0 bg-gradient-to-br ${config.lightCardBg}`}
                   >
                     <div className="flex items-center gap-3">
@@ -405,14 +486,14 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
                     />
                     <div className="overflow-hidden flex-1">
                       <h3
-                        onClick={() => onOpenLink(link)}
+                        onClick={(e) => handleOpenCardLink(e, link)}
                         className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors line-clamp-2 leading-snug"
                         title={link.title}
                       >
                         {link.title}
                       </h3>
                       <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate max-w-[180px] font-mono mt-0.5">
-                        {link.url.replace(/(^\w+:|^)\/\//, '')}
+                        {(link.url || '').replace(/(^\w+:|^)\/\//, '')}
                       </p>
                     </div>
                   </div>
@@ -463,7 +544,7 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
                 <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 space-y-2">
                   {/* Big Prominent "MỞ BÀI GIẢNG" Button */}
                   <button
-                    onClick={() => onOpenLink(link)}
+                    onClick={(e) => handleOpenCardLink(e, link)}
                     className={`w-full py-2.5 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer ${config.btnGradient}`}
                     id={`btn-open-lesson-${link.id}`}
                   >
