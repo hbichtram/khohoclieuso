@@ -307,15 +307,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Core Sections */}
-        <div className="space-y-1">
+        {/* Core Navigation Sections (BỘ ĐIỀU HƯỚNG) */}
+        <div className="mt-4 pt-1 mb-4 space-y-2" id="sidebar-navigation-group">
           {!isCollapsed && (
-            <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-2 mb-2">
-              Bộ điều hướng
-            </p>
+            <div className="flex items-center justify-between px-2 mb-2">
+              <p className="text-[11px] font-extrabold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Bộ điều hướng</span>
+              </p>
+            </div>
           )}
 
-          {/* Recent Materials view */}
+          {/* 1. HỌC LIỆU MỚI (Highest Priority / Nổi bật nhất) */}
           <button
             onClick={() => {
               onChangeFilter('recent');
@@ -323,52 +325,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onSelectSubCategory(null);
               window.location.hash = '#/new-materials';
             }}
-            style={activeFilter === 'recent' ? { backgroundColor: settings.primaryColor, boxShadow: `0 4px 12px ${settings.primaryColor}25` } : undefined}
-            className={`w-full flex items-center justify-between px-3 h-10 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            className={`w-full relative flex items-center ${
+              isCollapsed ? 'justify-center h-12 px-0' : 'justify-between px-3 h-[54px]'
+            } rounded-2xl transition-all duration-200 ease-out cursor-pointer active:scale-[0.98] ${
               activeFilter === 'recent'
-                ? 'text-white font-bold'
-                : 'text-zinc-650 dark:text-zinc-350 hover:bg-white/10 dark:hover:bg-white/5'
+                ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-md shadow-orange-500/25 border border-amber-400/40 font-bold'
+                : 'bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-rose-500/5 dark:from-amber-500/15 dark:via-orange-500/10 dark:to-rose-500/10 border border-amber-500/25 dark:border-amber-500/20 text-zinc-800 dark:text-zinc-100 hover:border-amber-500/40 hover:from-amber-500/15 hover:to-orange-500/15 hover:shadow-sm'
             }`}
-            title="Học liệu mới"
+            title="🆕 Học liệu mới cập nhật"
             id="nav-btn-recent"
           >
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span>Học liệu mới</span>}
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                  activeFilter === 'recent'
+                    ? 'bg-white/20 text-white backdrop-blur-xs shadow-inner'
+                    : 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-xs'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 shrink-0" />
+              </div>
+              {!isCollapsed && (
+                <div className="text-left min-w-0">
+                  <span className={`block text-[13px] leading-snug font-bold truncate ${
+                    activeFilter === 'recent' ? 'text-white' : 'text-zinc-900 dark:text-zinc-100'
+                  }`}>
+                    Học liệu mới
+                  </span>
+                  <span className={`block text-[10px] leading-tight truncate ${
+                    activeFilter === 'recent' ? 'text-amber-100' : 'text-amber-600/90 dark:text-amber-400/90 font-medium'
+                  }`}>
+                    Cập nhật liên tục
+                  </span>
+                </div>
+              )}
             </div>
-            {!isCollapsed && (
-              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                activeFilter === 'recent' ? 'bg-white/25 text-white' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-              }`}>
+
+            {/* Badge MỚI on the right */}
+            {!isCollapsed ? (
+              <span
+                className={`text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 shadow-xs transition-all ${
+                  activeFilter === 'recent'
+                    ? 'bg-white text-orange-600'
+                    : 'bg-gradient-to-r from-amber-500 to-rose-500 text-white'
+                }`}
+              >
                 Mới
               </span>
+            ) : (
+              /* Dot indicator when collapsed */
+              <span className="w-2 h-2 rounded-full bg-rose-500 absolute top-1.5 right-1.5 ring-2 ring-white dark:ring-zinc-900" />
             )}
           </button>
 
-          {/* Dashboard view */}
-          <button
-            onClick={() => {
-              onChangeFilter('dashboard');
-              onSelectCategory(null);
-              onSelectSubCategory(null);
-              window.location.hash = '#/dashboard';
-            }}
-            style={activeFilter === 'dashboard' ? { backgroundColor: settings.primaryColor, boxShadow: `0 4px 12px ${settings.primaryColor}25` } : undefined}
-            className={`w-full flex items-center justify-between px-3 h-10 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeFilter === 'dashboard'
-                ? 'text-white font-bold'
-                : 'text-zinc-650 dark:text-zinc-350 hover:bg-white/10 dark:hover:bg-white/5'
-            }`}
-            title="Bảng thống kê Dashboard"
-            id="nav-btn-dashboard"
-          >
-            <div className="flex items-center gap-3">
-              <BarChart className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span>Bảng thống kê</span>}
-            </div>
-          </button>
-
-          {/* All Links */}
+          {/* 2. TẤT CẢ LIÊN KẾT (Second Priority / Nổi bật thứ hai) */}
           <button
             onClick={() => {
               onChangeFilter('all');
@@ -378,24 +388,102 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 window.history.replaceState(null, '', window.location.pathname + window.location.search);
               }
             }}
-            style={activeFilter === 'all' && activeCategoryId === null ? { backgroundColor: `${settings.primaryColor}20`, borderColor: `${settings.primaryColor}30`, borderWidth: 1 } : undefined}
-            className={`w-full flex items-center justify-between px-3 h-10 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeFilter === 'all' && activeCategoryId === null
-                ? 'text-[var(--primary-accent)] font-bold'
-                : 'text-zinc-650 dark:text-zinc-350 hover:bg-white/10 dark:hover:bg-white/5'
+            className={`w-full relative flex items-center ${
+              isCollapsed ? 'justify-center h-12 px-0' : 'justify-between px-3 h-[54px]'
+            } rounded-2xl transition-all duration-200 ease-out cursor-pointer active:scale-[0.98] ${
+              activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
+                ? 'bg-blue-600 dark:bg-blue-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/40 font-bold'
+                : 'bg-white/70 dark:bg-zinc-800/60 border border-zinc-200/90 dark:border-zinc-750 text-zinc-800 dark:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-650 hover:shadow-xs shadow-2xs'
             }`}
-            title="Tất cả liên kết"
+            title="▦ Tất cả liên kết học liệu"
             id="nav-btn-all"
           >
-            <div className="flex items-center gap-3">
-              <Grid3X3 className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span>Tất cả liên kết</span>}
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                  activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
+                    ? 'bg-white/20 text-white backdrop-blur-xs shadow-inner'
+                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20 border border-blue-500/10'
+                }`}
+              >
+                <Grid3X3 className="w-4 h-4 shrink-0" />
+              </div>
+              {!isCollapsed && (
+                <div className="text-left min-w-0">
+                  <span className={`block text-[13px] leading-snug font-bold truncate ${
+                    activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
+                      ? 'text-white'
+                      : 'text-zinc-900 dark:text-zinc-100'
+                  }`}>
+                    Tất cả liên kết
+                  </span>
+                  <span className={`block text-[10px] leading-tight truncate ${
+                    activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
+                      ? 'text-blue-100'
+                      : 'text-zinc-400 dark:text-zinc-500 font-medium'
+                  }`}>
+                    Kho tài nguyên số
+                  </span>
+                </div>
+              )}
             </div>
+
             {!isCollapsed && (
-              <span className="text-[10px] font-bold bg-white/20 dark:bg-black/20 text-zinc-650 dark:text-zinc-350 px-1.5 py-0.5 rounded-full border border-white/10">
+              <span
+                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 transition-all ${
+                  activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
+                    ? 'bg-white/25 text-white font-extrabold'
+                    : 'bg-zinc-100 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200/80 dark:border-zinc-600/80'
+                }`}
+              >
                 {totalLinksCount}
               </span>
             )}
+          </button>
+
+          {/* 3. BẢNG THỐNG KÊ (Moderate Priority / Nổi bật vừa phải) */}
+          <button
+            onClick={() => {
+              onChangeFilter('dashboard');
+              onSelectCategory(null);
+              onSelectSubCategory(null);
+              window.location.hash = '#/dashboard';
+            }}
+            className={`w-full relative flex items-center ${
+              isCollapsed ? 'justify-center h-12 px-0' : 'justify-between px-3 h-[54px]'
+            } rounded-2xl transition-all duration-200 ease-out cursor-pointer active:scale-[0.98] ${
+              activeFilter === 'dashboard'
+                ? 'bg-emerald-600 dark:bg-emerald-600 text-white shadow-md shadow-emerald-500/25 border border-emerald-400/40 font-bold'
+                : 'bg-white/50 dark:bg-zinc-800/40 border border-zinc-200/70 dark:border-zinc-800 text-zinc-750 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xs shadow-2xs'
+            }`}
+            title="📊 Bảng thống kê học liệu"
+            id="nav-btn-dashboard"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                  activeFilter === 'dashboard'
+                    ? 'bg-white/20 text-white backdrop-blur-xs shadow-inner'
+                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-500/20 border border-emerald-500/10'
+                }`}
+              >
+                <BarChart className="w-4 h-4 shrink-0" />
+              </div>
+              {!isCollapsed && (
+                <div className="text-left min-w-0">
+                  <span className={`block text-[13px] leading-snug font-bold truncate ${
+                    activeFilter === 'dashboard' ? 'text-white' : 'text-zinc-900 dark:text-zinc-100'
+                  }`}>
+                    Bảng thống kê
+                  </span>
+                  <span className={`block text-[10px] leading-tight truncate ${
+                    activeFilter === 'dashboard' ? 'text-emerald-100' : 'text-zinc-400 dark:text-zinc-500 font-medium'
+                  }`}>
+                    Tổng quan & biểu đồ
+                  </span>
+                </div>
+              )}
+            </div>
           </button>
         </div>
 

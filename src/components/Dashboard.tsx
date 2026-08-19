@@ -205,11 +205,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     };
 
     allLinks.forEach((l) => {
+      if (!l) return;
       if (l.resourceType && typeMap[l.resourceType]) {
         typeMap[l.resourceType].count++;
       } else {
+        const urlStr = l.url ? String(l.url).toLowerCase() : '';
         // Fallback deduce by category or url
-        if (l.categoryId === 'cat-video' || l.url.includes('youtube') || l.url.includes('youtu.be')) {
+        if (l.categoryId === 'cat-video' || urlStr.includes('youtube') || urlStr.includes('youtu.be')) {
           typeMap.video.count++;
         } else if (l.categoryId === 'cat-ent' || l.categoryId === 'cat-game') {
           typeMap.game.count++;
