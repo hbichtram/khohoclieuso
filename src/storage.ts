@@ -97,47 +97,6 @@ export const extractCleanDomain = (urlStr: string): string => {
 };
 
 // Storage Service Class
-export const normalizeLinkItem = (payload: Partial<LinkItem>): LinkItem => {
-  const now = new Date().toISOString();
-  const id = payload.id && payload.id.trim() ? payload.id.trim() : `link-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  const cleanUrl = payload.url?.trim() || '';
-  
-  return {
-    id,
-    title: payload.title?.trim() || 'Học liệu mới',
-    url: cleanUrl,
-    description: payload.description?.trim() || '',
-    categoryId: payload.categoryId?.trim() || 'cat-work',
-    color: payload.color?.trim() || '#3B82F6',
-    favicon: payload.favicon?.trim() || getFaviconUrl(cleanUrl),
-    notes: payload.notes?.trim() || '',
-    isFavorite: Boolean(payload.isFavorite),
-    isPinned: Boolean(payload.isPinned),
-    viewsCount: typeof payload.viewsCount === 'number' && !isNaN(payload.viewsCount) ? payload.viewsCount : 0,
-    createdAt: payload.createdAt || now,
-    updatedAt: now,
-    imageUrl: payload.imageUrl?.trim() || '',
-    subCategoryId: payload.subCategoryId || '',
-    topic: payload.topic?.trim() || '',
-    lesson: payload.lesson?.trim() || '',
-    resourceType: payload.resourceType || '',
-    keywords: payload.keywords?.trim() || '',
-    isHidden: Boolean(payload.isHidden),
-    order: typeof payload.order === 'number' ? payload.order : 0,
-  };
-};
-
-export const cleanFirestoreData = <T extends Record<string, any>>(data: T): Record<string, any> => {
-  const result: Record<string, any> = {};
-  Object.keys(data).forEach((key) => {
-    const val = data[key];
-    if (val !== undefined) {
-      result[key] = val;
-    }
-  });
-  return result;
-};
-
 export const StorageService = {
   getLinks(): LinkItem[] {
     try {

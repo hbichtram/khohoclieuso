@@ -24,7 +24,7 @@
         "icon": { "type": "string" },
         "userId": { "type": "string" }
       },
-      "required": ["id", "name", "color"]
+      "required": ["id", "name", "color", "userId"]
     },
     "LinkItem": {
       "title": "LinkItem",
@@ -44,16 +44,9 @@
         "viewsCount": { "type": "integer" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" },
-        "subCategoryId": { "type": "string" },
-        "topic": { "type": "string" },
-        "lesson": { "type": "string" },
-        "resourceType": { "type": "string" },
-        "keywords": { "type": "string" },
-        "isHidden": { "type": "boolean" },
-        "imageUrl": { "type": "string" },
         "userId": { "type": "string" }
       },
-      "required": ["id", "title", "url", "categoryId"]
+      "required": ["id", "title", "url", "categoryId", "userId"]
     },
     "AppConfig": {
       "title": "AppConfig",
@@ -75,14 +68,6 @@
     "app_config/{configId}": {
       "schema": "AppConfig",
       "description": "Global application configuration accessible to viewers and admins"
-    },
-    "links/{linkId}": {
-      "schema": "LinkItem",
-      "description": "Global repository of learning materials and links accessible to all users"
-    },
-    "categories/{categoryId}": {
-      "schema": "Category",
-      "description": "Global categories collection"
     },
     "users/{userId}": {
       "schema": "UserSetting",

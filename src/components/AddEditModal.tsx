@@ -249,17 +249,17 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
       color,
       favicon: favicon || getFaviconUrl(cleanUrl),
       notes: sanitizeInput(notes.trim()),
-      isFavorite: Boolean(isFavorite),
-      isPinned: Boolean(isPinned),
-      imageUrl: imageUrl.trim() || '',
+      isFavorite,
+      isPinned,
+      imageUrl: imageUrl.trim() || undefined,
       
       // Dynamic fields for subcategory (when selected category is Bài giảng E-Learning)
-      subCategoryId: isElearningCategory ? (subCategoryId as any) || '' : '',
-      topic: isElearningCategory ? sanitizeInput(topic.trim()) : '',
-      lesson: isElearningCategory ? sanitizeInput(lesson.trim()) : '',
-      resourceType: isElearningCategory ? (resourceType as any) || '' : '',
-      keywords: isElearningCategory ? sanitizeInput(keywords.trim()) : '',
-      isHidden: isElearningCategory ? Boolean(isHidden) : false,
+      subCategoryId: isElearningCategory ? (subCategoryId as any) || '' : undefined,
+      topic: isElearningCategory ? sanitizeInput(topic.trim()) : undefined,
+      lesson: isElearningCategory ? sanitizeInput(lesson.trim()) : undefined,
+      resourceType: isElearningCategory ? (resourceType as any) || '' : undefined,
+      keywords: isElearningCategory ? sanitizeInput(keywords.trim()) : undefined,
+      isHidden: isElearningCategory ? isHidden : undefined,
     };
 
     onSave(payload);
