@@ -9,7 +9,7 @@ service cloud.firestore {
     
     // Validate document ID size/pattern
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     // Is the user the owner of the resource
@@ -19,29 +19,27 @@ service cloud.firestore {
 
     // Helper functions for validating entities
     function isValidUserSetting(data) {
-      return data.theme is string && (data.theme == 'light' || data.theme == 'dark')
-          && data.primaryColor is string && data.primaryColor.size() <= 30
-          && data.animationsEnabled is bool
-          && data.layout is string && (data.layout == 'grid' || data.layout == 'list')
-          && data.itemsPerPage is int && data.itemsPerPage > 0 && data.itemsPerPage <= 100;
+      return (!('theme' in data) || (data.theme is string && (data.theme == 'light' || data.theme == 'dark')))
+          && (!('primaryColor' in data) || (data.primaryColor is string && data.primaryColor.size() <= 30))
+          && (!('animationsEnabled' in data) || data.animationsEnabled is bool)
+          && (!('layout' in data) || (data.layout is string && (data.layout == 'grid' || data.layout == 'list')))
+          && (!('itemsPerPage' in data) || (data.itemsPerPage is number && data.itemsPerPage > 0 && data.itemsPerPage <= 100));
     }
 
-    function isValidCategory(data, userId) {
+    function isValidCategory(data) {
       return data.id is string && data.id.size() <= 128
           && data.name is string && data.name.size() > 0 && data.name.size() <= 100
-          && data.color is string && data.color.size() <= 30
-          && (data.userId == userId);
+          && data.color is string && data.color.size() <= 30;
     }
 
-    function isValidLinkItem(data, userId) {
+    function isValidLinkItem(data) {
       return data.id is string && data.id.size() <= 128
-          && data.title is string && data.title.size() > 0 && data.title.size() <= 200
-          && data.url is string && data.url.size() > 0 && data.url.size() <= 2000
+          && data.title is string && data.title.size() > 0 && data.title.size() <= 500
+          && data.url is string && data.url.size() > 0 && data.url.size() <= 2048
           && data.categoryId is string && data.categoryId.size() <= 128
-          && data.userId == userId
           && data.isFavorite is bool
           && data.isPinned is bool
-          && data.viewsCount is int;
+          && data.viewsCount is number;
     }
 
     function isValidBannerConfig(data) {
@@ -58,28 +56,41 @@ service cloud.firestore {
     match /app_config/{configId} {
       allow read, get, list: if true;
       allow create, update: if isValidBannerConfig(request.resource.data);
-      allow delete: if isSignedIn();
+      allow delete: if true;
+    }
+
+    // Match global shared links collection (accessible to all viewers, managed by admin)
+    match /links/{linkId} {
+      allow read, get, list: if true;
+      allow create, update: if isValidId(linkId) && isValidLinkItem(request.resource.data);
+      allow delete: if isValidId(linkId);
+    }
+
+    // Match global shared categories collection
+    match /categories/{categoryId} {
+      allow read, get, list: if true;
+      allow create, update: if isValidId(categoryId) && isValidCategory(request.resource.data);
+      allow delete: if isValidId(categoryId);
     }
 
     // Match users collection
     match /users/{userId} {
-      allow get: if isSignedIn() && isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId) && isValidUserSetting(request.resource.data);
-      allow update: if isSignedIn() && isOwner(userId) && isValidUserSetting(request.resource.data);
+      allow get, read, list: if true;
+      allow create, update: if isValidUserSetting(request.resource.data);
       allow delete: if isSignedIn() && isOwner(userId);
 
       // Match categories subcollection
       match /categories/{categoryId} {
-        allow read, list: if isSignedIn() && isOwner(userId);
-        allow create, update: if isSignedIn() && isOwner(userId) && isValidId(categoryId) && isValidCategory(request.resource.data, userId);
-        allow delete: if isSignedIn() && isOwner(userId) && isValidId(categoryId);
+        allow read, get, list: if true;
+        allow create, update: if isValidId(categoryId) && isValidCategory(request.resource.data);
+        allow delete: if isValidId(categoryId);
       }
 
       // Match links subcollection
       match /links/{linkId} {
-        allow read, list: if isSignedIn() && isOwner(userId);
-        allow create, update: if isSignedIn() && isOwner(userId) && isValidId(linkId) && isValidLinkItem(request.resource.data, userId);
-        allow delete: if isSignedIn() && isOwner(userId) && isValidId(linkId);
+        allow read, get, list: if true;
+        allow create, update: if isValidId(linkId) && isValidLinkItem(request.resource.data);
+        allow delete: if isValidId(linkId);
       }
     }
   }

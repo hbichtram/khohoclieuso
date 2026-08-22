@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 import { LinkItem, Category, Settings, ToastMessage, BannerConfig, DEFAULT_BANNER_CONFIG } from './types';
-import { StorageService, isValidUrl, normalizeVietnamese } from './storage';
+import { StorageService, isValidUrl, normalizeVietnamese, normalizeLinkItem, cleanFirestoreData } from './storage';
 import { Sidebar } from './components/Sidebar';
 import { LinkCard } from './components/LinkCard';
 import { AddEditModal } from './components/AddEditModal';
@@ -445,96 +445,99 @@ export default function App() {
 
   // Realtime Cloud synchronization listeners
   useEffect(() => {
-    if (!user || !db) return;
+    if (!isConfigured || !db) return;
 
-    let hasShownPermissionError = false;
-
-    const handleSyncError = (error: any, path: string, operation: OperationType) => {
-      console.warn(`Firestore sync error on ${path}:`, error);
-      if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission'))) {
-        if (!hasShownPermissionError) {
-          hasShownPermissionError = true;
-          handleAddToast('Lỗi phân quyền Firestore! Hãy cập nhật Rules trên Firebase Console theo hướng dẫn.', 'error');
-          // Fallback to local storage so user has active data
-          setLinks(StorageService.getLinks());
-          setCategories(StorageService.getCategories());
-          setSettings(StorageService.getSettings());
+    // 1. Shared Global Links subscription (available to both Admins and Viewers)
+    const linksColRef = collection(db, 'links');
+    const unsubSharedLinks = onSnapshot(
+      linksColRef,
+      async (snap) => {
+        if (!snap.empty) {
+          const linksList: LinkItem[] = [];
+          snap.forEach((docSnap) => {
+            const item = docSnap.data() as Partial<LinkItem>;
+            linksList.push(normalizeLinkItem({ ...item, id: docSnap.id }));
+          });
+          // Sort by creation date descending by default
+          linksList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setLinks(linksList);
+          StorageService.saveLinks(linksList);
+        } else {
+          // Initialize remote Firestore with current local links if Firestore is empty
+          const currentLinks = StorageService.getLinks();
+          if (currentLinks.length > 0) {
+            for (const link of currentLinks) {
+              const cleanData = cleanFirestoreData({
+                ...normalizeLinkItem(link),
+                userId: user?.uid || 'admin',
+              });
+              await setDoc(doc(db, 'links', link.id), cleanData).catch((err) => {
+                console.warn('Initial link seed to Firestore warning:', err);
+              });
+            }
+          }
         }
-      } else {
-        handleFirestoreError(error, operation, path);
+      },
+      (error) => {
+        console.warn('Firestore links listener warning:', error);
       }
-    };
+    );
 
-    // 1. Subscribe to Settings document
-    const settingsDocRef = doc(db, 'users', user.uid);
-    const unsubSettings = onSnapshot(settingsDocRef, (snap) => {
-      if (snap.exists()) {
-        setSettings(snap.data() as Settings);
-      } else {
-        // First-time user: upload current local settings to firestore
-        setDoc(settingsDocRef, settings)
-          .catch((err) => handleSyncError(err, `users/${user.uid}`, OperationType.WRITE));
-      }
-    }, (error) => {
-      handleSyncError(error, `users/${user.uid}`, OperationType.GET);
-    });
-
-    // 2. Subscribe to Categories collection
-    const categoriesColRef = collection(db, 'users', user.uid, 'categories');
-    const unsubCategories = onSnapshot(categoriesColRef, async (snap) => {
-      if (!snap.empty) {
-        const catsList: Category[] = [];
-        snap.forEach((docSnap) => {
-          catsList.push(docSnap.data() as Category);
-        });
-        setCategories(catsList);
-      } else {
-        // Upload initial default categories to firestore
-        const currentCats = categories.length > 0 ? categories : StorageService.getCategories();
-        for (const cat of currentCats) {
-          await setDoc(doc(categoriesColRef, cat.id), {
-            id: cat.id,
-            name: cat.name,
-            color: cat.color,
-            userId: user.uid,
-          }).catch((err) => handleSyncError(err, `users/${user.uid}/categories/${cat.id}`, OperationType.WRITE));
+    // 2. Shared Global Categories subscription
+    const catsColRef = collection(db, 'categories');
+    const unsubSharedCategories = onSnapshot(
+      catsColRef,
+      async (snap) => {
+        if (!snap.empty) {
+          const catsList: Category[] = [];
+          snap.forEach((docSnap) => {
+            const item = docSnap.data() as Category;
+            catsList.push({
+              id: item.id || docSnap.id,
+              name: item.name || '',
+              color: item.color || '#3B82F6',
+              icon: item.icon || undefined,
+            });
+          });
+          setCategories(catsList);
+          StorageService.saveCategories(catsList);
+        } else {
+          const currentCats = StorageService.getCategories();
+          if (currentCats.length > 0) {
+            for (const cat of currentCats) {
+              const cleanData = cleanFirestoreData({
+                ...cat,
+                userId: user?.uid || 'admin',
+              });
+              await setDoc(doc(db, 'categories', cat.id), cleanData).catch((err) => {
+                console.warn('Initial category seed to Firestore warning:', err);
+              });
+            }
+          }
         }
+      },
+      (error) => {
+        console.warn('Firestore categories listener warning:', error);
       }
-    }, (error) => {
-      handleSyncError(error, `users/${user.uid}/categories`, OperationType.GET);
-    });
+    );
 
-    // 3. Subscribe to Links collection (Unified single collection)
-    const linksColRef = collection(db, 'users', user.uid, 'links');
-    const unsubLinks = onSnapshot(linksColRef, async (snap) => {
-      const linksList: LinkItem[] = [];
-
-      snap.forEach((docSnap) => {
-        const item = docSnap.data() as LinkItem;
-        const linkWithId = { ...item, id: docSnap.id } as LinkItem;
-        linksList.push(linkWithId);
+    // 3. User settings subscription (when signed in with Google)
+    let unsubUserSettings = () => {};
+    if (user) {
+      const settingsDocRef = doc(db, 'users', user.uid);
+      unsubUserSettings = onSnapshot(settingsDocRef, (snap) => {
+        if (snap.exists()) {
+          setSettings((prev) => ({ ...prev, ...(snap.data() as Settings) }));
+        }
+      }, (err) => {
+        console.warn('User settings listener warning:', err);
       });
-
-      setLinks(linksList);
-      StorageService.saveLinks(linksList);
-
-      // Upload local links if Firestore is completely empty
-      if (snap.empty && links.length > 0) {
-        for (const link of links) {
-          await setDoc(doc(linksColRef, link.id), {
-            ...link,
-            userId: user.uid,
-          }).catch((err) => handleSyncError(err, `users/${user.uid}/links/${link.id}`, OperationType.WRITE));
-        }
-      }
-    }, (error) => {
-      handleSyncError(error, `users/${user.uid}/links`, OperationType.GET);
-    });
+    }
 
     return () => {
-      unsubSettings();
-      unsubCategories();
-      unsubLinks();
+      unsubSharedLinks();
+      unsubSharedCategories();
+      unsubUserSettings();
     };
   }, [user]);
 
@@ -573,11 +576,11 @@ export default function App() {
   // Synchronize layout theme preferences
   const handleUpdateSettings = async (newSettings: Settings) => {
     setSettings(newSettings);
+    StorageService.saveSettings(newSettings);
     if (user && db) {
-      await setDoc(doc(db, 'users', user.uid), newSettings)
-        .catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`));
-    } else {
-      StorageService.saveSettings(newSettings);
+      await setDoc(doc(db, 'users', user.uid), cleanFirestoreData(newSettings)).catch((err) => {
+        console.error('Lỗi khi lưu cài đặt người dùng:', err);
+      });
     }
   };
 
@@ -588,30 +591,41 @@ export default function App() {
       return;
     }
     setCategories(updatedCats);
-    if (user && db) {
-      const categoriesColRef = collection(db, 'users', user.uid, 'categories');
-      const currentIds = new Set(updatedCats.map((c) => c.id));
-      const previousCats = categories;
+    StorageService.saveCategories(updatedCats);
 
-      // Delete removed categories
-      for (const prev of previousCats) {
-        if (!currentIds.has(prev.id)) {
-          await deleteDoc(doc(categoriesColRef, prev.id))
-            .catch((err) => handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/categories/${prev.id}`));
+    if (isConfigured && db) {
+      try {
+        const categoriesColRef = collection(db, 'categories');
+        const currentIds = new Set(updatedCats.map((c) => c.id));
+        const previousCats = categories;
+
+        // Delete removed categories
+        for (const prev of previousCats) {
+          if (!currentIds.has(prev.id)) {
+            await deleteDoc(doc(categoriesColRef, prev.id)).catch(() => {});
+            if (user) {
+              await deleteDoc(doc(db, 'users', user.uid, 'categories', prev.id)).catch(() => {});
+            }
+          }
         }
-      }
 
-      // Save all updated categories
-      for (const cat of updatedCats) {
-        await setDoc(doc(categoriesColRef, cat.id), {
-          id: cat.id,
-          name: cat.name,
-          color: cat.color,
-          userId: user.uid,
-        }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/categories/${cat.id}`));
+        // Save all updated categories
+        for (const cat of updatedCats) {
+          const cleanCat = cleanFirestoreData({
+            id: cat.id,
+            name: cat.name,
+            color: cat.color,
+            icon: cat.icon || '',
+            userId: user?.uid || 'admin',
+          });
+          await setDoc(doc(categoriesColRef, cat.id), cleanCat);
+          if (user) {
+            await setDoc(doc(db, 'users', user.uid, 'categories', cat.id), cleanCat).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi khi lưu danh mục vào Firestore:', err);
       }
-    } else {
-      StorageService.saveCategories(updatedCats);
     }
   };
 
@@ -652,64 +666,93 @@ export default function App() {
       handleAddToast('Bạn đang ở chế độ Người xem, không thể thêm hoặc sửa liên kết!', 'error');
       return;
     }
-    if (editingLink) {
-      // Edit mode
-      const updatedLink = {
-        ...editingLink,
-        ...payload,
-        updatedAt: new Date().toISOString(),
-      } as LinkItem;
 
-      const updatedLinks = links.map((l) => (l.id === editingLink.id ? updatedLink : l));
-      setLinks(updatedLinks);
-      StorageService.saveLinks(updatedLinks);
+    const cleanTitle = payload.title?.trim();
+    const cleanUrl = payload.url?.trim();
+    const categoryId = payload.categoryId?.trim() || 'cat-work';
 
-      if (user && db) {
-        await setDoc(doc(db, 'users', user.uid, 'links', editingLink.id), {
-          ...updatedLink,
-          userId: user.uid,
-        }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${editingLink.id}`));
-      }
-      handleAddToast('Cập nhật liên kết thành công!', 'success');
-    } else {
-      // Create mode
-      const newLinkId = `link-${Date.now()}`;
-      const newLink: LinkItem = {
-        id: newLinkId,
-        title: payload.title || 'Liên kết mới',
-        url: payload.url || '',
-        description: payload.description || '',
-        categoryId: payload.categoryId || 'cat-work',
-        color: payload.color || '#3B82F6',
-        favicon: payload.favicon || '',
-        notes: payload.notes || '',
-        isFavorite: !!payload.isFavorite,
-        isPinned: !!payload.isPinned,
-        viewsCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        imageUrl: payload.imageUrl || '',
-        subCategoryId: payload.subCategoryId || '',
-        topic: payload.topic || '',
-        lesson: payload.lesson || '',
-        resourceType: payload.resourceType || '',
-        keywords: payload.keywords || '',
-        isHidden: !!payload.isHidden,
-      };
-
-      const updatedLinks = [newLink, ...links];
-      setLinks(updatedLinks);
-      StorageService.saveLinks(updatedLinks);
-
-      if (user && db) {
-        await setDoc(doc(db, 'users', user.uid, 'links', newLinkId), {
-          ...newLink,
-          userId: user.uid,
-        }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${newLinkId}`));
-      }
-      handleAddToast('Đã lưu liên kết mới thành công!', 'success');
+    if (!cleanTitle) {
+      handleAddToast('Vui lòng nhập tiêu đề cho liên kết!', 'error');
+      return;
     }
-    setEditingLink(null);
+    if (!cleanUrl) {
+      handleAddToast('Vui lòng nhập đường dẫn URL!', 'error');
+      return;
+    }
+    if (!isValidUrl(cleanUrl)) {
+      handleAddToast('Đường dẫn URL không hợp lệ! Vui lòng kiểm tra lại.', 'error');
+      return;
+    }
+
+    try {
+      if (editingLink) {
+        // Edit mode
+        const updatedLink = normalizeLinkItem({
+          ...editingLink,
+          ...payload,
+          id: editingLink.id,
+          title: cleanTitle,
+          url: cleanUrl,
+          categoryId,
+          updatedAt: new Date().toISOString(),
+        });
+
+        // 1. Write to shared Firestore database
+        if (isConfigured && db) {
+          const cleanDocData = cleanFirestoreData({
+            ...updatedLink,
+            userId: user?.uid || 'admin',
+          });
+          await setDoc(doc(db, 'links', editingLink.id), cleanDocData);
+          if (user) {
+            await setDoc(doc(db, 'users', user.uid, 'links', editingLink.id), cleanDocData).catch(() => {});
+          }
+        }
+
+        // 2. Update local state and cache immediately
+        const updatedLinks = links.map((l) => (l.id === editingLink.id ? updatedLink : l));
+        setLinks(updatedLinks);
+        StorageService.saveLinks(updatedLinks);
+
+        handleAddToast('Đã lưu học liệu thành công.', 'success');
+      } else {
+        // Create mode
+        const newLinkId = `link-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const newLink = normalizeLinkItem({
+          ...payload,
+          id: newLinkId,
+          title: cleanTitle,
+          url: cleanUrl,
+          categoryId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+
+        // 1. Write to shared Firestore database
+        if (isConfigured && db) {
+          const cleanDocData = cleanFirestoreData({
+            ...newLink,
+            userId: user?.uid || 'admin',
+          });
+          await setDoc(doc(db, 'links', newLinkId), cleanDocData);
+          if (user) {
+            await setDoc(doc(db, 'users', user.uid, 'links', newLinkId), cleanDocData).catch(() => {});
+          }
+        }
+
+        // 2. Update local state and cache immediately
+        const updatedLinks = [newLink, ...links];
+        setLinks(updatedLinks);
+        StorageService.saveLinks(updatedLinks);
+
+        handleAddToast('Đã lưu học liệu thành công.', 'success');
+      }
+
+      setEditingLink(null);
+    } catch (error) {
+      console.error('Lỗi khi lưu học liệu vào database:', error);
+      handleAddToast('Không thể lưu học liệu. Vui lòng thử lại.', 'error');
+    }
   };
 
   const handleDeleteRequest = (link: LinkItem) => {
@@ -727,15 +770,23 @@ export default function App() {
       return;
     }
     if (deletingLink) {
-      const updatedLinks = links.filter((l) => l.id !== deletingLink.id);
-      setLinks(updatedLinks);
-      StorageService.saveLinks(updatedLinks);
+      try {
+        if (isConfigured && db) {
+          await deleteDoc(doc(db, 'links', deletingLink.id));
+          if (user) {
+            await deleteDoc(doc(db, 'users', user.uid, 'links', deletingLink.id)).catch(() => {});
+          }
+        }
 
-      if (user && db) {
-        await deleteDoc(doc(db, 'users', user.uid, 'links', deletingLink.id))
-          .catch((err) => handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/links/${deletingLink.id}`));
+        const updatedLinks = links.filter((l) => l.id !== deletingLink.id);
+        setLinks(updatedLinks);
+        StorageService.saveLinks(updatedLinks);
+
+        handleAddToast('Đã xóa học liệu thành công.', 'success');
+      } catch (error) {
+        console.error('Lỗi khi xóa học liệu khỏi database:', error);
+        handleAddToast('Không thể xóa học liệu. Vui lòng thử lại.', 'error');
       }
-      handleAddToast('Đã xóa liên kết thành công!', 'success');
     }
     setIsDeleteConfirmOpen(false);
     setDeletingLink(null);
@@ -749,23 +800,30 @@ export default function App() {
     const targetLink = links.find((l) => l.id === id);
     if (!targetLink) return;
     const nextState = !targetLink.isFavorite;
-    handleAddToast(nextState ? 'Đã thêm vào danh sách yêu thích!' : 'Đã xóa khỏi danh sách yêu thích!', 'info');
 
-    const updatedLink = {
+    const updatedLink = normalizeLinkItem({
       ...targetLink,
       isFavorite: nextState,
       updatedAt: new Date().toISOString(),
-    };
+    });
 
     const updatedLinks = links.map((l) => (l.id === id ? updatedLink : l));
     setLinks(updatedLinks);
     StorageService.saveLinks(updatedLinks);
 
-    if (user && db) {
-      await setDoc(doc(db, 'users', user.uid, 'links', id), {
+    handleAddToast(nextState ? 'Đã thêm vào danh sách yêu thích!' : 'Đã xóa khỏi danh sách yêu thích!', 'info');
+
+    if (isConfigured && db) {
+      const cleanDocData = cleanFirestoreData({
         ...updatedLink,
-        userId: user.uid,
-      }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${id}`));
+        userId: user?.uid || 'admin',
+      });
+      await setDoc(doc(db, 'links', id), cleanDocData).catch((err) => {
+        console.error('Lỗi khi cập nhật trạng thái yêu thích:', err);
+      });
+      if (user) {
+        await setDoc(doc(db, 'users', user.uid, 'links', id), cleanDocData).catch(() => {});
+      }
     }
   };
 
@@ -777,23 +835,30 @@ export default function App() {
     const targetLink = links.find((l) => l.id === id);
     if (!targetLink) return;
     const nextState = !targetLink.isPinned;
-    handleAddToast(nextState ? 'Đã ghim liên kết lên đầu!' : 'Đã bỏ ghim liên kết!', 'info');
 
-    const updatedLink = {
+    const updatedLink = normalizeLinkItem({
       ...targetLink,
       isPinned: nextState,
       updatedAt: new Date().toISOString(),
-    };
+    });
 
     const updatedLinks = links.map((l) => (l.id === id ? updatedLink : l));
     setLinks(updatedLinks);
     StorageService.saveLinks(updatedLinks);
 
-    if (user && db) {
-      await setDoc(doc(db, 'users', user.uid, 'links', id), {
+    handleAddToast(nextState ? 'Đã ghim liên kết lên đầu!' : 'Đã bỏ ghim liên kết!', 'info');
+
+    if (isConfigured && db) {
+      const cleanDocData = cleanFirestoreData({
         ...updatedLink,
-        userId: user.uid,
-      }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${id}`));
+        userId: user?.uid || 'admin',
+      });
+      await setDoc(doc(db, 'links', id), cleanDocData).catch((err) => {
+        console.error('Lỗi khi cập nhật trạng thái ghim:', err);
+      });
+      if (user) {
+        await setDoc(doc(db, 'users', user.uid, 'links', id), cleanDocData).catch(() => {});
+      }
     }
   };
 
@@ -802,20 +867,23 @@ export default function App() {
     if (!targetLink) return;
     const nextViews = (targetLink.viewsCount || 0) + 1;
 
-    const updatedLink = {
+    const updatedLink = normalizeLinkItem({
       ...targetLink,
       viewsCount: nextViews,
-    };
+    });
 
     const updatedLinks = links.map((l) => (l.id === id ? updatedLink : l));
     setLinks(updatedLinks);
     StorageService.saveLinks(updatedLinks);
 
-    if (user && db) {
-      await setDoc(doc(db, 'users', user.uid, 'links', id), {
+    if (isConfigured && db) {
+      const cleanDocData = cleanFirestoreData({
         ...updatedLink,
-        userId: user.uid,
-      }).catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/links/${id}`));
+        userId: user?.uid || 'admin',
+      });
+      await setDoc(doc(db, 'links', id), cleanDocData).catch((err) => {
+        console.warn('Lỗi khi tăng lượt xem:', err);
+      });
     }
   };
 
