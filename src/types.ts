@@ -66,14 +66,13 @@ export interface ToastMessage {
 }
 
 export const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'cat-work', name: 'Bài giảng E-Learning', color: '#3B82F6' }, // Blue
-  { id: 'cat-edu', name: 'Giảng dạy', color: '#10B981' }, // Green
-  { id: 'cat-tech', name: 'Tin học', color: '#8B5CF6' }, // Purple
-  { id: 'cat-ai', name: 'AI', color: '#EC4899' }, // Pink
-  { id: 'cat-video', name: 'Video', color: '#EF4444' }, // Red
-  { id: 'cat-web', name: 'Website', color: '#F59E0B' }, // Yellow
-  { id: 'cat-doc', name: 'Tài liệu', color: '#06B6D4' }, // Cyan
-  { id: 'cat-ent', name: 'Giải trí', color: '#6B7280' }, // Gray
+  { id: 'cat-work', name: 'Bài giảng E-Learning', color: '#3B82F6', icon: '📘' }, // Blue
+  { id: 'cat-tech', name: 'Tin học', color: '#8B5CF6', icon: '💻' }, // Purple
+  { id: 'cat-ai', name: 'AI', color: '#EC4899', icon: '🤖' }, // Pink
+  { id: 'cat-video', name: 'Video', color: '#EF4444', icon: '🎬' }, // Red
+  { id: 'cat-web', name: 'Website', color: '#F59E0B', icon: '🌐' }, // Yellow
+  { id: 'cat-doc', name: 'Tài liệu', color: '#06B6D4', icon: '📄' }, // Cyan
+  { id: 'cat-game', name: 'Trò chơi', color: '#10B981', icon: '🎮' }, // Green
 ];
 
 export const THEME_COLORS = [

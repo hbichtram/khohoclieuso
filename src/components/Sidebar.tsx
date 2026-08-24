@@ -566,10 +566,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {isElearningExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         </span>
                       )}
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: cat.color }}
-                      />
+                      <span className="text-sm shrink-0 select-none">
+                        {cat.icon || (
+                          cat.id === 'cat-work' ? '📘' :
+                          cat.id === 'cat-tech' ? '💻' :
+                          cat.id === 'cat-ai' ? '🤖' :
+                          cat.id === 'cat-video' ? '🎬' :
+                          cat.id === 'cat-web' ? '🌐' :
+                          cat.id === 'cat-doc' ? '📄' :
+                          cat.id === 'cat-game' ? '🎮' : '📁'
+                        )}
+                      </span>
                       {!isCollapsed && <span className="truncate">{cat.name}</span>}
                     </div>
                     {!isCollapsed && (

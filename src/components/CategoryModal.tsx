@@ -245,8 +245,19 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                       id={`category-item-${cat.id}`}
                     >
                       <div className="flex items-center gap-3">
+                        <span className="text-base select-none">
+                          {cat.icon || (
+                            cat.id === 'cat-work' ? '📘' :
+                            cat.id === 'cat-tech' ? '💻' :
+                            cat.id === 'cat-ai' ? '🤖' :
+                            cat.id === 'cat-video' ? '🎬' :
+                            cat.id === 'cat-web' ? '🌐' :
+                            cat.id === 'cat-doc' ? '📄' :
+                            cat.id === 'cat-game' ? '🎮' : '📁'
+                          )}
+                        </span>
                         <span
-                          className="w-3.5 h-3.5 rounded-full"
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: cat.color }}
                         />
                         <div>

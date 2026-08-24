@@ -96,26 +96,199 @@ export const extractCleanDomain = (urlStr: string): string => {
   }
 };
 
+// Helper to map any category name, legacy ID, or alias to standard canonical Category ID
+export const canonicalCategoryId = (input?: string | null): string => {
+  if (!input) return 'cat-work';
+  const val = input.trim().toLowerCase();
+  
+  if (
+    val === 'cat-work' ||
+    val === 'cat-edu' ||
+    val === 'bài giảng e-learning' ||
+    val === 'bai giang e-learning' ||
+    val === 'elearning' ||
+    val === 'e-learning' ||
+    val === 'công việc' ||
+    val === 'cong viec' ||
+    val === 'giảng dạy' ||
+    val === 'giang day'
+  ) {
+    return 'cat-work';
+  }
+  if (
+    val === 'cat-tech' ||
+    val === 'tin học' ||
+    val === 'tin hoc' ||
+    val === 'tinhoc' ||
+    val === 'tech' ||
+    val === 'it'
+  ) {
+    return 'cat-tech';
+  }
+  if (
+    val === 'cat-ai' ||
+    val === 'ai' ||
+    val === 'trí tuệ nhân tạo' ||
+    val === 'tri tue nhan tao' ||
+    val === 'artificial intelligence'
+  ) {
+    return 'cat-ai';
+  }
+  if (
+    val === 'cat-video' ||
+    val === 'video' ||
+    val === 'clip' ||
+    val === 'youtube'
+  ) {
+    return 'cat-video';
+  }
+  if (
+    val === 'cat-web' ||
+    val === 'website' ||
+    val === 'web' ||
+    val === 'trang web' ||
+    val === 'trangweb'
+  ) {
+    return 'cat-web';
+  }
+  if (
+    val === 'cat-doc' ||
+    val === 'tài liệu' ||
+    val === 'tai lieu' ||
+    val === 'document' ||
+    val === 'doc' ||
+    val === 'docs' ||
+    val === 'giáo án'
+  ) {
+    return 'cat-doc';
+  }
+  if (
+    val === 'cat-game' ||
+    val === 'cat-ent' ||
+    val === 'trò chơi' ||
+    val === 'tro choi' ||
+    val === 'game' ||
+    val === 'games' ||
+    val === 'giải trí' ||
+    val === 'giai tri'
+  ) {
+    return 'cat-game';
+  }
+  return input;
+};
+
+// Helper to determine link's category with full backward compatibility
+export const resolveLinkCategoryId = (link: Partial<LinkItem> & Record<string, any>): string => {
+  // 1. Direct categoryId
+  if (link.categoryId) {
+    const mapped = canonicalCategoryId(link.categoryId);
+    if (mapped) return mapped;
+  }
+
+  // 2. Legacy 'category' or 'categoryName'
+  const legacyCat = link.category || link.categoryName;
+  if (legacyCat && typeof legacyCat === 'string') {
+    const mapped = canonicalCategoryId(legacyCat);
+    if (mapped) return mapped;
+  }
+
+  // 3. Legacy 'type'
+  if (link.type && typeof link.type === 'string') {
+    const mapped = canonicalCategoryId(link.type);
+    if (mapped) return mapped;
+  }
+
+  // 4. SubCategoryId belongs to E-Learning (Tin học 3/4/5)
+  if (link.subCategoryId === 'tinhoc3' || link.subCategoryId === 'tinhoc4' || link.subCategoryId === 'tinhoc5') {
+    return 'cat-work';
+  }
+
+  // 5. Resource type mapping
+  if (link.resourceType === 'video') return 'cat-video';
+  if (link.resourceType === 'game') return 'cat-game';
+  if (link.resourceType === 'lecture') return 'cat-work';
+
+  return 'cat-work';
+};
+
+// Helper to ensure all 7 core categories are present while preserving existing/custom categories
+export const ensureAllDefaultCategories = (incomingCats: Category[]): Category[] => {
+  const existingMap = new Map<string, Category>();
+
+  if (Array.isArray(incomingCats)) {
+    incomingCats.forEach((c) => {
+      if (!c || !c.id) return;
+      const canonicalId = canonicalCategoryId(c.id);
+      const defMatch = DEFAULT_CATEGORIES.find((d) => d.id === canonicalId);
+      
+      let name = c.name?.trim() || (defMatch ? defMatch.name : '');
+      if (canonicalId === 'cat-work' && (name === 'Công việc' || !name)) {
+        name = 'Bài giảng E-Learning';
+      }
+      if (canonicalId === 'cat-game' && (name === 'Giải trí' || !name)) {
+        name = 'Trò chơi';
+      }
+
+      existingMap.set(canonicalId, {
+        id: canonicalId,
+        name: (defMatch ? defMatch.name : name) || canonicalId,
+        color: c.color || (defMatch ? defMatch.color : '#3B82F6'),
+        icon: defMatch?.icon || c.icon || undefined,
+      });
+    });
+  }
+
+  // Merge in standard order
+  const result: Category[] = [];
+  const addedIds = new Set<string>();
+
+  DEFAULT_CATEGORIES.forEach((defCat) => {
+    const existing = existingMap.get(defCat.id);
+    if (existing) {
+      result.push({
+        ...defCat,
+        ...existing,
+        name: defCat.name,
+        icon: defCat.icon,
+      });
+    } else {
+      result.push({ ...defCat });
+    }
+    addedIds.add(defCat.id);
+  });
+
+  // Preserve any custom user-defined categories
+  existingMap.forEach((cat, id) => {
+    if (!addedIds.has(id)) {
+      result.push(cat);
+    }
+  });
+
+  return result;
+};
+
 // Storage Service Class
-export const normalizeLinkItem = (payload: Partial<LinkItem>): LinkItem => {
+export const normalizeLinkItem = (payload: Partial<LinkItem> & Record<string, any>): LinkItem => {
   const now = new Date().toISOString();
   const id = payload.id && payload.id.trim() ? payload.id.trim() : `link-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const cleanUrl = payload.url?.trim() || '';
-  
+  const resolvedCatId = resolveLinkCategoryId(payload);
+  const defCat = DEFAULT_CATEGORIES.find((c) => c.id === resolvedCatId);
+
   return {
     id,
     title: payload.title?.trim() || 'Học liệu mới',
     url: cleanUrl,
     description: payload.description?.trim() || '',
-    categoryId: payload.categoryId?.trim() || 'cat-work',
-    color: payload.color?.trim() || '#3B82F6',
+    categoryId: resolvedCatId,
+    color: payload.color?.trim() || defCat?.color || '#3B82F6',
     favicon: payload.favicon?.trim() || getFaviconUrl(cleanUrl),
     notes: payload.notes?.trim() || '',
     isFavorite: Boolean(payload.isFavorite),
     isPinned: Boolean(payload.isPinned),
     viewsCount: typeof payload.viewsCount === 'number' && !isNaN(payload.viewsCount) ? payload.viewsCount : 0,
     createdAt: payload.createdAt || now,
-    updatedAt: now,
+    updatedAt: payload.updatedAt || now,
     imageUrl: payload.imageUrl?.trim() || '',
     subCategoryId: payload.subCategoryId || '',
     topic: payload.topic?.trim() || '',
@@ -304,6 +477,55 @@ export const StorageService = {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             imageUrl: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=600&q=80',
+          },
+          {
+            id: 'starter-4',
+            title: 'Hành Trang Số - Sách Giáo Khoa Điện Tử',
+            url: 'https://hanhtrangso.nxbgd.vn',
+            description: 'Nền tảng sách giáo khoa và tài liệu bổ trợ Tin học số hoá của Nhà xuất bản Giáo dục Việt Nam.',
+            categoryId: 'cat-web',
+            color: '#F59E0B',
+            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=hanhtrangso.nxbgd.vn',
+            notes: 'Học sinh có thể xem trực tuyến toàn bộ sách giáo khoa và bài tập tương tác.',
+            isFavorite: false,
+            isPinned: false,
+            viewsCount: 15,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            imageUrl: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=600&q=80',
+          },
+          {
+            id: 'starter-5',
+            title: 'Code.org - Trò chơi Lập trình Hour of Code',
+            url: 'https://code.org',
+            description: 'Các trò chơi mê cung, giải đố logic giúp học sinh luyện tư duy thuật toán thông qua trò chơi hấp dẫn.',
+            categoryId: 'cat-game',
+            resourceType: 'game',
+            color: '#10B981',
+            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=code.org',
+            notes: 'Thực hành các màn chơi giải cứu nhân vật bằng câu lệnh khối.',
+            isFavorite: true,
+            isPinned: false,
+            viewsCount: 28,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80',
+          },
+          {
+            id: 'starter-6',
+            title: 'Tự học Kỹ năng Tin học Văn phòng & Máy tính',
+            url: 'https://hocit.vn',
+            description: 'Hướng dẫn tổng hợp về phần cứng, phần mềm và kỹ năng sử dụng máy tính an toàn cho trẻ em.',
+            categoryId: 'cat-tech',
+            color: '#8B5CF6',
+            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=google.com',
+            notes: 'Bổ trợ kiến thức máy tính và an toàn mạng.',
+            isFavorite: false,
+            isPinned: false,
+            viewsCount: 14,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            imageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80',
           }
         ];
         this.saveLinks(starterLinks);
@@ -311,16 +533,7 @@ export const StorageService = {
       }
 
       // Ensure all links have categoryId mapped properly
-      const normalized = linksList.map((l) => {
-        let catId = l.categoryId;
-        if (!catId) {
-          catId = l.subCategoryId ? 'cat-work' : 'cat-work';
-        }
-        return {
-          ...l,
-          categoryId: catId,
-        };
-      });
+      const normalized = linksList.map((l) => normalizeLinkItem(l));
 
       this.saveLinks(normalized);
       return normalized;
@@ -383,19 +596,9 @@ export const StorageService = {
         return DEFAULT_CATEGORIES;
       }
       const parsed: Category[] = JSON.parse(data);
-      let updated = false;
-      const migrated = parsed.map((cat) => {
-        if (cat.name === 'Công việc' || (cat.id === 'cat-work' && cat.name !== 'Bài giảng E-Learning')) {
-          updated = true;
-          return { ...cat, name: 'Bài giảng E-Learning' };
-        }
-        return cat;
-      });
-      if (updated) {
-        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(migrated));
-        return migrated;
-      }
-      return parsed;
+      const merged = ensureAllDefaultCategories(parsed);
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(merged));
+      return merged;
     } catch (e) {
       console.error('Error loading categories', e);
       return DEFAULT_CATEGORIES;

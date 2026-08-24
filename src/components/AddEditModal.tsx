@@ -464,13 +464,28 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
                   </label>
                   <select
                     value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
+                    onChange={(e) => {
+                      const newCatId = e.target.value;
+                      setCategoryId(newCatId);
+                      const matchingCat = categories.find((c) => c.id === newCatId);
+                      if (matchingCat && !editingLink) {
+                        setColor(matchingCat.color);
+                      }
+                    }}
                     className="w-full px-3 h-10 text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary-accent)]/20"
                     id="select-category"
                   >
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id} className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-slate-100">
-                        {cat.name}
+                        {cat.icon || (
+                          cat.id === 'cat-work' ? '📘' :
+                          cat.id === 'cat-tech' ? '💻' :
+                          cat.id === 'cat-ai' ? '🤖' :
+                          cat.id === 'cat-video' ? '🎬' :
+                          cat.id === 'cat-web' ? '🌐' :
+                          cat.id === 'cat-doc' ? '📄' :
+                          cat.id === 'cat-game' ? '🎮' : '📁'
+                        )} {cat.name}
                       </option>
                     ))}
                   </select>

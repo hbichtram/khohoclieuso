@@ -22,7 +22,16 @@ import {
 } from 'lucide-react';
 
 import { LinkItem, Category, Settings, ToastMessage, BannerConfig, DEFAULT_BANNER_CONFIG } from './types';
-import { StorageService, isValidUrl, normalizeVietnamese, normalizeLinkItem, cleanFirestoreData } from './storage';
+import { 
+  StorageService, 
+  isValidUrl, 
+  normalizeVietnamese, 
+  normalizeLinkItem, 
+  cleanFirestoreData,
+  canonicalCategoryId,
+  resolveLinkCategoryId,
+  ensureAllDefaultCategories,
+} from './storage';
 import { Sidebar } from './components/Sidebar';
 import { LinkCard } from './components/LinkCard';
 import { AddEditModal } from './components/AddEditModal';
@@ -491,31 +500,38 @@ export default function App() {
     const unsubSharedCategories = onSnapshot(
       catsColRef,
       async (snap) => {
+        const catsList: Category[] = [];
         if (!snap.empty) {
-          const catsList: Category[] = [];
           snap.forEach((docSnap) => {
             const item = docSnap.data() as Category;
+            const canonicalId = canonicalCategoryId(item.id || docSnap.id);
             catsList.push({
-              id: item.id || docSnap.id,
+              id: canonicalId,
               name: item.name || '',
               color: item.color || '#3B82F6',
               icon: item.icon || undefined,
             });
           });
-          setCategories(catsList);
-          StorageService.saveCategories(catsList);
-        } else {
-          const currentCats = StorageService.getCategories();
-          if (currentCats.length > 0) {
-            for (const cat of currentCats) {
-              const cleanData = cleanFirestoreData({
-                ...cat,
-                userId: user?.uid || 'admin',
-              });
-              await setDoc(doc(db, 'categories', cat.id), cleanData).catch((err) => {
-                console.warn('Initial category seed to Firestore warning:', err);
-              });
-            }
+        }
+        
+        // Ensure all 7 core categories are present while preserving any custom ones
+        const fullCatsList = ensureAllDefaultCategories(catsList);
+        setCategories(fullCatsList);
+        StorageService.saveCategories(fullCatsList);
+
+        // If Firestore had fewer categories or was empty, persist the full set
+        if (snap.empty || fullCatsList.length > catsList.length) {
+          for (const cat of fullCatsList) {
+            const cleanData = cleanFirestoreData({
+              id: cat.id,
+              name: cat.name,
+              color: cat.color,
+              icon: cat.icon || '',
+              userId: user?.uid || 'admin',
+            });
+            await setDoc(doc(db, 'categories', cat.id), cleanData).catch((err) => {
+              console.warn('Initial category seed to Firestore warning:', err);
+            });
           }
         }
       },
@@ -655,13 +671,18 @@ export default function App() {
   // Links count in each category
   const linksCountByCategory = useMemo(() => {
     const counts: Record<string, number> = {};
+    categories.forEach((cat) => {
+      counts[cat.id] = 0;
+    });
+
     links.forEach((l) => {
       if (role === 'admin' || !l.isHidden) {
-        counts[l.categoryId] = (counts[l.categoryId] || 0) + 1;
+        const catId = resolveLinkCategoryId(l);
+        counts[catId] = (counts[catId] || 0) + 1;
       }
     });
     return counts;
-  }, [links, role]);
+  }, [links, categories, role]);
 
   // Links mutators
   const handleSaveLink = async (payload: Partial<LinkItem>) => {
@@ -982,24 +1003,7 @@ export default function App() {
 
   // Filter, Search, Sort Logic
   const filteredLinks = useMemo(() => {
-    let baseList: LinkItem[] = [];
-    if (activeFilter === 'favorites' || activeFilter === 'pinned') {
-      baseList = [...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links];
-    } else if (activeCategoryId === 'cat-work') {
-      if (activeSubCategoryId === 'tinhoc3') {
-        baseList = tinhoc3Links;
-      } else if (activeSubCategoryId === 'tinhoc4') {
-        baseList = tinhoc4Links;
-      } else if (activeSubCategoryId === 'tinhoc5') {
-        baseList = tinhoc5Links;
-      } else {
-        baseList = [...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links];
-      }
-    } else {
-      baseList = links;
-    }
-
-    let result = [...baseList];
+    let result = [...links];
 
     // 1. Filter out hidden links if the user is not an administrator
     if (role !== 'admin') {
@@ -1014,21 +1018,26 @@ export default function App() {
     }
 
     // 3. Filter by specific Category
-    if (activeCategoryId && activeFilter !== 'favorites' && activeFilter !== 'pinned') {
+    if (activeCategoryId && activeFilter !== 'favorites' && activeFilter !== 'pinned' && activeFilter !== 'dashboard' && activeFilter !== 'recent') {
       if (activeCategoryId === 'cat-work') {
         if (activeSubCategoryId) {
           result = result.filter((l) => l.subCategoryId === activeSubCategoryId);
         } else {
-          result = result.filter(
-            (l) =>
-              l.categoryId === 'cat-work' ||
+          result = result.filter((l) => {
+            const catId = resolveLinkCategoryId(l);
+            return (
+              catId === 'cat-work' ||
               l.subCategoryId === 'tinhoc3' ||
               l.subCategoryId === 'tinhoc4' ||
               l.subCategoryId === 'tinhoc5'
-          );
+            );
+          });
         }
       } else {
-        result = result.filter((l) => l.categoryId === activeCategoryId);
+        result = result.filter((l) => {
+          const catId = resolveLinkCategoryId(l);
+          return catId === activeCategoryId;
+        });
       }
     }
 
