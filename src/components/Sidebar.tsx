@@ -27,6 +27,7 @@ import {
   User,
   Image as ImageIcon,
   Sparkles,
+  Home,
 } from 'lucide-react';
 import { Category, Settings, THEME_COLORS } from '../types';
 
@@ -37,6 +38,8 @@ interface SidebarProps {
   onSelectCategory: (id: string | null) => void;
   activeSubCategoryId: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null;
   onSelectSubCategory: (id: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null) => void;
+  activeGradeLibrary?: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null;
+  onGoHome?: () => void;
   activeFilter: 'all' | 'favorites' | 'pinned' | 'dashboard' | 'recent';
   onChangeFilter: (filter: 'all' | 'favorites' | 'pinned' | 'dashboard' | 'recent') => void;
   settings: Settings;
@@ -64,6 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectCategory,
   activeSubCategoryId,
   onSelectSubCategory,
+  activeGradeLibrary,
+  onGoHome,
   activeFilter,
   onChangeFilter,
   settings,
@@ -88,6 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showConfig, setShowConfig] = useState(false);
 
   const isAdmin = role === 'admin';
+  const isHomeActive = activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null && !activeGradeLibrary;
 
   const toggleTheme = () => {
     onUpdateSettings({
@@ -317,7 +323,74 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* 1. HỌC LIỆU MỚI (Highest Priority / Nổi bật nhất) */}
+          {/* 1. TRANG CHỦ (Home / Tổng quan - Vị trí đầu tiên) */}
+          <button
+            onClick={() => {
+              if (onGoHome) {
+                onGoHome();
+              } else {
+                onChangeFilter('all');
+                onSelectCategory(null);
+                onSelectSubCategory(null);
+                if (window.location.hash) {
+                  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                }
+              }
+            }}
+            className={`w-full relative flex items-center ${
+              isCollapsed ? 'justify-center h-12 px-0' : 'justify-between px-3 h-[54px]'
+            } rounded-2xl transition-all duration-200 ease-out cursor-pointer active:scale-[0.98] ${
+              isHomeActive
+                ? 'bg-blue-600 dark:bg-blue-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/40 font-bold'
+                : 'bg-white/70 dark:bg-zinc-800/60 border border-zinc-200/90 dark:border-zinc-750 text-zinc-800 dark:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-650 hover:shadow-xs shadow-2xs'
+            }`}
+            title="🏠 Trang chủ - Cổng học liệu số"
+            id="nav-btn-home"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                  isHomeActive
+                    ? 'bg-white/20 text-white backdrop-blur-xs shadow-inner'
+                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20 border border-blue-500/10'
+                }`}
+              >
+                <Home className="w-4 h-4 shrink-0" />
+              </div>
+              {!isCollapsed && (
+                <div className="text-left min-w-0">
+                  <span className={`block text-[13px] leading-snug font-bold truncate ${
+                    isHomeActive
+                      ? 'text-white'
+                      : 'text-zinc-900 dark:text-zinc-100'
+                  }`}>
+                    Trang chủ
+                  </span>
+                  <span className={`block text-[10px] leading-tight truncate ${
+                    isHomeActive
+                      ? 'text-blue-100'
+                      : 'text-zinc-400 dark:text-zinc-500 font-medium'
+                  }`}>
+                    Tổng quan & Kho học liệu
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {!isCollapsed && (
+              <span
+                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 transition-all ${
+                  isHomeActive
+                    ? 'bg-white/25 text-white font-extrabold'
+                    : 'bg-zinc-100 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200/80 dark:border-zinc-600/80'
+                }`}
+              >
+                {totalLinksCount}
+              </span>
+            )}
+          </button>
+
+          {/* 2. HỌC LIỆU MỚI (Second - Nổi bật học liệu mới) */}
           <button
             onClick={() => {
               onChangeFilter('recent');
@@ -378,70 +451,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* 2. TẤT CẢ LIÊN KẾT (Second Priority / Nổi bật thứ hai) */}
-          <button
-            onClick={() => {
-              onChangeFilter('all');
-              onSelectCategory(null);
-              onSelectSubCategory(null);
-              if (window.location.hash) {
-                window.history.replaceState(null, '', window.location.pathname + window.location.search);
-              }
-            }}
-            className={`w-full relative flex items-center ${
-              isCollapsed ? 'justify-center h-12 px-0' : 'justify-between px-3 h-[54px]'
-            } rounded-2xl transition-all duration-200 ease-out cursor-pointer active:scale-[0.98] ${
-              activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
-                ? 'bg-blue-600 dark:bg-blue-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/40 font-bold'
-                : 'bg-white/70 dark:bg-zinc-800/60 border border-zinc-200/90 dark:border-zinc-750 text-zinc-800 dark:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-650 hover:shadow-xs shadow-2xs'
-            }`}
-            title="▦ Tất cả liên kết học liệu"
-            id="nav-btn-all"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
-                  activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
-                    ? 'bg-white/20 text-white backdrop-blur-xs shadow-inner'
-                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20 border border-blue-500/10'
-                }`}
-              >
-                <Grid3X3 className="w-4 h-4 shrink-0" />
-              </div>
-              {!isCollapsed && (
-                <div className="text-left min-w-0">
-                  <span className={`block text-[13px] leading-snug font-bold truncate ${
-                    activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
-                      ? 'text-white'
-                      : 'text-zinc-900 dark:text-zinc-100'
-                  }`}>
-                    Tất cả liên kết
-                  </span>
-                  <span className={`block text-[10px] leading-tight truncate ${
-                    activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
-                      ? 'text-blue-100'
-                      : 'text-zinc-400 dark:text-zinc-500 font-medium'
-                  }`}>
-                    Kho tài nguyên số
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {!isCollapsed && (
-              <span
-                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 transition-all ${
-                  activeFilter === 'all' && activeCategoryId === null && activeSubCategoryId === null
-                    ? 'bg-white/25 text-white font-extrabold'
-                    : 'bg-zinc-100 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200/80 dark:border-zinc-600/80'
-                }`}
-              >
-                {totalLinksCount}
-              </span>
-            )}
-          </button>
-
-          {/* 3. BẢNG THỐNG KÊ (Moderate Priority / Nổi bật vừa phải) */}
+          {/* 3. BẢNG THỐNG KÊ (Third - Thống kê & Dashboard) */}
           <button
             onClick={() => {
               onChangeFilter('dashboard');

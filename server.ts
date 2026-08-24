@@ -11,15 +11,25 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Lazy initialization of Gemini Client
+let aiClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY environment variable is not configured");
     }
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
-});
+  return aiClient;
+}
 
 // API endpoint for AI analysis of links
 app.post("/api/ai/analyze-link", async (req, res) => {
@@ -46,8 +56,9 @@ app.post("/api/ai/analyze-link", async (req, res) => {
     isLinkActive = false;
   }
 
-  // 2. Call Gemini 3.5 Flash for smart extraction and classification
+  // 2. Call Gemini for smart extraction and classification
   try {
+    const ai = getGeminiClient();
     const prompt = `Bạn là một trợ lý giáo dục tiểu học thông minh người Việt Nam. 
 Nhiệm vụ của bạn là phân tích một liên kết học liệu giáo dục (URL: "${url}", Tiêu đề gợi ý: "${title || 'Chưa rõ'}", Mô tả gợi ý: "${description || 'Chưa rõ'}") và đưa ra đề xuất phân loại cho môn học "Tin học" ở cấp tiểu học.
 
@@ -75,7 +86,7 @@ Hãy tự động phân loại thông minh nhất dựa trên tiêu đề, tên 
 Chỉ trả về chuỗi JSON thô, KHÔNG bao quanh bởi block \`\`\`json hay bất kỳ chữ nào khác.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.7-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json"
@@ -134,4 +145,6 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+});
