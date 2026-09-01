@@ -46,6 +46,7 @@ interface AddEditModalProps {
   links: LinkItem[];
   defaultCategoryId?: string | null;
   defaultSubCategoryId?: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | null;
+  role?: 'admin' | 'viewer';
 }
 
 const PRESET_LINK_COLORS = [
@@ -69,6 +70,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
   links,
   defaultCategoryId,
   defaultSubCategoryId,
+  role = 'admin',
 }) => {
   // Input mode: 'link' (URL) or 'file' (Tải tệp từ máy tính)
   const [entryMode, setEntryMode] = useState<'link' | 'file'>('link');
@@ -307,6 +309,11 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (role === 'viewer') {
+      onAddToast('Bạn đang ở chế độ Người xem, chỉ Quản trị viên mới được thêm học liệu!', 'error');
+      return;
+    }
+
     const cleanTitle = title.trim();
 
     if (!cleanTitle) {
@@ -325,12 +332,12 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
     let finalFileSize = uploadedFileSize;
     let isUploaded = entryMode === 'file';
 
-    // If file mode and a new file is chosen, upload to Firebase Storage first
+    // If file mode and a new file is chosen, upload to server / Firebase Storage
     if (entryMode === 'file') {
       if (selectedFile) {
         setIsUploading(true);
-        setUploadProgress(10);
-        onAddToast('Đang tải tệp lên hệ thống lưu trữ...', 'info');
+        setUploadProgress(5);
+        onAddToast('Bắt đầu tải tệp lên hệ thống...', 'info');
 
         try {
           const uploadRes = await uploadFileToFirebaseStorage(selectedFile, (pct) => {
@@ -339,15 +346,16 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
 
           finalUrl = uploadRes.downloadUrl;
           finalStoragePath = uploadRes.storagePath;
-          finalFileName = selectedFile.name;
-          finalFileSize = selectedFile.size;
+          finalFileName = uploadRes.fileName || selectedFile.name;
+          finalFileSize = uploadRes.fileSize || selectedFile.size;
           isUploaded = true;
 
-          onAddToast('Tải tệp thành công!', 'success');
+          onAddToast('Tải lên thành công!', 'success');
         } catch (uploadError: any) {
           console.error('Lỗi upload file:', uploadError);
           setIsUploading(false);
-          onAddToast('Không thể tải tệp lên hệ thống lưu trữ. Vui lòng thử lại!', 'error');
+          const errorMsg = uploadError?.message || 'Không thể tải tệp lên. Vui lòng thử lại!';
+          onAddToast(`Lỗi tải tệp: ${errorMsg}`, 'error');
           return;
         } finally {
           setIsUploading(false);
@@ -609,19 +617,40 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
                         </div>
                       </div>
 
+                      {/* Upload Progress Bar */}
+                      {isUploading && (
+                        <div className="pt-2 border-t border-blue-200/50 dark:border-blue-900/30">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              Đang tải tệp lên hệ thống...
+                            </span>
+                            <span className="font-bold font-mono text-blue-600 dark:text-blue-400">{uploadProgress}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-blue-100 dark:bg-blue-950 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-600 dark:bg-blue-500 rounded-full transition-all duration-200 ease-out"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       {/* AI auto suggest helper button */}
-                      <div className="flex items-center justify-between pt-2 border-t border-blue-200/50 dark:border-blue-900/30 text-xs text-zinc-500">
-                        <span>Đã nhận diện: <strong>{badgeInfo.label}</strong></span>
-                        <button
-                          type="button"
-                          onClick={handleAiAnalyze}
-                          disabled={isAiLoading}
-                          className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          AI gợi ý bài học từ tên tệp
-                        </button>
-                      </div>
+                      {!isUploading && (
+                        <div className="flex items-center justify-between pt-2 border-t border-blue-200/50 dark:border-blue-900/30 text-xs text-zinc-500">
+                          <span>Đã nhận diện: <strong>{badgeInfo.label}</strong></span>
+                          <button
+                            type="button"
+                            onClick={handleAiAnalyze}
+                            disabled={isAiLoading}
+                            className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            AI gợi ý bài học từ tên tệp
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     /* Drag & Drop / Click to Upload Box */

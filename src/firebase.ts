@@ -150,76 +150,117 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Upload a document or media file to Firebase Storage
+ * Upload a document or media file with real-time 0% -> 100% progress tracking
  */
 export async function uploadFileToFirebaseStorage(
   file: File,
   onProgress?: (progress: number) => void
-): Promise<{ downloadUrl: string; storagePath: string }> {
-  // Sanitize filename to avoid invalid storage characters
-  const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const timestamp = Date.now();
-  const storagePath = `materials/${timestamp}_${cleanName}`;
-
-  if (firebaseStorage && isConfigured) {
-    try {
-      const storageRef = ref(firebaseStorage, storagePath);
-      const uploadTask = uploadBytesResumable(storageRef, file, {
-        contentType: file.type || 'application/octet-stream',
-        customMetadata: {
-          originalName: encodeURIComponent(file.name),
-          uploadedAt: new Date().toISOString(),
-        }
-      });
-
-      return new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            if (onProgress) onProgress(Math.round(progress));
-          },
-          (error) => {
-            console.error('Firebase Storage upload error:', error);
-            // Fallback to server upload if direct client upload fails
-            uploadViaServerApi(file, onProgress).then(resolve).catch(reject);
-          },
-          async () => {
-            try {
-              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              if (onProgress) onProgress(100);
-              resolve({ downloadUrl, storagePath });
-            } catch (urlErr) {
-              console.error('Error getting download URL:', urlErr);
-              uploadViaServerApi(file, onProgress).then(resolve).catch(reject);
-            }
-          }
-        );
-      });
-    } catch (err) {
-      console.warn('Firebase Storage upload exception, attempting server fallback:', err);
-      return uploadViaServerApi(file, onProgress);
-    }
+): Promise<{ downloadUrl: string; storagePath: string; fileName: string; fileSize: number; mimeType?: string }> {
+  if (!file) {
+    throw new Error('Không có tệp nào được chọn để tải lên.');
   }
 
-  // Fallback to server API upload
-  return uploadViaServerApi(file, onProgress);
+  // Initial progress kick-off
+  if (onProgress) onProgress(5);
+
+  return new Promise((resolve, reject) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload-file', true);
+
+      // Track true byte-level upload progress
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(Math.min(99, Math.max(5, percent)));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.success && data.downloadUrl) {
+              if (onProgress) onProgress(100);
+              resolve({
+                downloadUrl: data.downloadUrl,
+                storagePath: data.storagePath || `materials/${Date.now()}_${file.name}`,
+                fileName: data.fileName || file.name,
+                fileSize: data.fileSize || file.size,
+                mimeType: data.mimeType || file.type,
+              });
+            } else {
+              reject(new Error(data.error || 'Máy chủ không thể lưu tệp'));
+            }
+          } catch (jsonErr: any) {
+            reject(new Error('Phản hồi từ máy chủ không hợp lệ: ' + jsonErr.message));
+          }
+        } else {
+          let errMsg = `Lỗi máy chủ (${xhr.status})`;
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            if (errData.error) errMsg = errData.error;
+          } catch {
+            // ignore
+          }
+          reject(new Error(errMsg));
+        }
+      };
+
+      xhr.onerror = () => {
+        // If XHR network error, try fallback via base64
+        console.warn('XHR FormData upload failed, attempting fallback...');
+        uploadViaBase64Fallback(file, onProgress)
+          .then(resolve)
+          .catch((fallbackErr) => {
+            reject(new Error('Lỗi kết nối mạng khi tải tệp: ' + fallbackErr.message));
+          });
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error('Quá thời gian tải tệp lên máy chủ (Timeout). Vui lòng thử lại với tệp nhỏ hơn.'));
+      };
+
+      // 5-minute timeout for large files
+      xhr.timeout = 300000;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', file.name);
+      formData.append('fileSize', String(file.size));
+      formData.append('fileType', file.type);
+
+      xhr.send(formData);
+    } catch (err: any) {
+      console.warn('Exception during XHR upload, trying Base64 fallback:', err);
+      uploadViaBase64Fallback(file, onProgress)
+        .then(resolve)
+        .catch(reject);
+    }
+  });
 }
 
 /**
- * Server-side upload API fallback
+ * Fallback upload method via Base64 JSON
  */
-async function uploadViaServerApi(
+async function uploadViaBase64Fallback(
   file: File,
   onProgress?: (progress: number) => void
-): Promise<{ downloadUrl: string; storagePath: string }> {
-  if (onProgress) onProgress(30);
+): Promise<{ downloadUrl: string; storagePath: string; fileName: string; fileSize: number; mimeType?: string }> {
+  if (onProgress) onProgress(20);
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    reader.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        const percent = Math.round((event.loaded / event.total) * 40) + 20; // 20% to 60%
+        onProgress(percent);
+      }
+    };
+
     reader.onload = async () => {
       try {
-        if (onProgress) onProgress(60);
+        if (onProgress) onProgress(70);
         const base64Data = reader.result as string;
         const res = await fetch('/api/upload-file', {
           method: 'POST',
@@ -234,60 +275,56 @@ async function uploadViaServerApi(
           }),
         });
 
+        if (onProgress) onProgress(90);
         const data = await res.json();
         if (data.success && data.downloadUrl) {
           if (onProgress) onProgress(100);
           resolve({
             downloadUrl: data.downloadUrl,
-            storagePath: data.storagePath || `server_uploads/${Date.now()}_${file.name}`,
+            storagePath: data.storagePath || `materials/${Date.now()}_${file.name}`,
+            fileName: data.fileName || file.name,
+            fileSize: data.fileSize || file.size,
+            mimeType: file.type,
           });
         } else {
-          // If server returns base64 directly or offline
-          if (onProgress) onProgress(100);
-          resolve({
-            downloadUrl: base64Data,
-            storagePath: `local/${Date.now()}_${file.name}`,
-          });
+          throw new Error(data.error || 'Không thể lưu tệp trên server');
         }
-      } catch (err) {
-        console.warn('Server upload fallback error, using data URL:', err);
-        if (onProgress) onProgress(100);
-        resolve({
-          downloadUrl: (reader.result as string) || URL.createObjectURL(file),
-          storagePath: `blob/${Date.now()}_${file.name}`,
-        });
+      } catch (err: any) {
+        console.error('Base64 fallback failed:', err);
+        reject(err);
       }
     };
-    reader.onerror = (err) => reject(err);
+
+    reader.onerror = (err) => reject(new Error('Lỗi khi đọc tệp từ thiết bị: ' + String(err)));
     reader.readAsDataURL(file);
   });
 }
 
 /**
- * Delete a file from Firebase Storage
+ * Delete a file from Storage
  */
 export async function deleteFileFromFirebaseStorage(storagePath: string): Promise<boolean> {
   if (!storagePath) return false;
 
-  // Firebase Storage delete
+  // 1. If Firebase Storage ref path
   if (firebaseStorage && isConfigured && storagePath.startsWith('materials/')) {
     try {
       const fileRef = ref(firebaseStorage, storagePath);
-      await deleteObject(fileRef);
-      return true;
+      await deleteObject(fileRef).catch(() => {});
     } catch (e) {
       console.warn('Firebase Storage delete warning:', e);
     }
   }
 
-  // Server API delete
+  // 2. Server API delete
   try {
-    await fetch('/api/delete-file', {
+    const res = await fetch('/api/delete-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ storagePath }),
     });
-    return true;
+    const data = await res.json();
+    return Boolean(data.success);
   } catch (e) {
     console.warn('Server delete file error:', e);
     return false;

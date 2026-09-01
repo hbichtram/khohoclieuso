@@ -1704,6 +1704,7 @@ export default function App() {
         links={[...links, ...tinhoc3Links, ...tinhoc4Links, ...tinhoc5Links]}
         defaultCategoryId={activeGradeLibrary ? 'cat-work' : (activeCategoryId || 'cat-work')}
         defaultSubCategoryId={activeGradeLibrary || activeSubCategoryId || undefined}
+        role={role}
       />
 
       {/* 2. Manage Categories Modal */}

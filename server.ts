@@ -4,6 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import multer from "multer";
 
 dotenv.config();
 
@@ -16,43 +17,93 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Multer storage engine configuration
+const storageEngine = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (_req, file, cb) => {
+    let originalName = file.originalname || "document";
+    try {
+      originalName = Buffer.from(file.originalname, "latin1").toString("utf8");
+    } catch {
+      // keep default if conversion fails
+    }
+    const ext = path.extname(originalName);
+    const baseName = path.basename(originalName, ext).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniqueFileName = `${Date.now()}_${baseName || "file"}${ext}`;
+    cb(null, uniqueFileName);
+  },
+});
+
+const uploadMiddleware = multer({
+  storage: storageEngine,
+  limits: { fileSize: 250 * 1024 * 1024 }, // 250MB limit
+});
+
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
-// Serve uploaded files statically
-app.use("/uploads", express.static(uploadsDir));
+// Serve uploaded files statically with download/view headers
+app.use("/uploads", express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+  }
+}));
 
-// File Upload Fallback Endpoint
-app.post("/api/upload-file", async (req, res) => {
+// File Upload Endpoint (supports both multipart FormData and JSON Base64 fallback)
+app.post("/api/upload-file", uploadMiddleware.single("file"), (req, res) => {
   try {
-    const { fileName, fileSize, fileType, data } = req.body;
-    if (!fileName || !data) {
-      return res.status(400).json({ error: "Thiếu dữ liệu tệp" });
+    // 1. Handled via multipart FormData
+    if (req.file) {
+      let originalName = req.file.originalname;
+      try {
+        originalName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+      } catch {
+        // fallback
+      }
+      const filename = req.file.filename;
+      const downloadUrl = `/uploads/${filename}`;
+      return res.json({
+        success: true,
+        downloadUrl,
+        storagePath: `server_uploads/${filename}`,
+        fileName: originalName,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+      });
     }
 
-    const cleanBaseName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const uniqueFileName = `${Date.now()}_${cleanBaseName}`;
-    const filePath = path.join(uploadsDir, uniqueFileName);
+    // 2. Handled via JSON Base64 fallback
+    const { fileName, data, fileType } = req.body || {};
+    if (fileName && data) {
+      const cleanBaseName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const uniqueFileName = `${Date.now()}_${cleanBaseName}`;
+      const filePath = path.join(uploadsDir, uniqueFileName);
 
-    // Extract base64 payload
-    const matches = data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    const buffer = matches && matches[2]
-      ? Buffer.from(matches[2], "base64")
-      : Buffer.from(data, "base64");
+      const matches = data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      const buffer = matches && matches[2]
+        ? Buffer.from(matches[2], "base64")
+        : Buffer.from(data, "base64");
 
-    fs.writeFileSync(filePath, buffer);
+      fs.writeFileSync(filePath, buffer);
 
-    const downloadUrl = `/uploads/${uniqueFileName}`;
-    return res.json({
-      success: true,
-      downloadUrl,
-      storagePath: `server_uploads/${uniqueFileName}`,
-      fileName,
-      fileSize: buffer.length,
-    });
+      const downloadUrl = `/uploads/${uniqueFileName}`;
+      return res.json({
+        success: true,
+        downloadUrl,
+        storagePath: `server_uploads/${uniqueFileName}`,
+        fileName,
+        fileSize: buffer.length,
+        mimeType: fileType || "application/octet-stream",
+      });
+    }
+
+    return res.status(400).json({ error: "Không tìm thấy dữ liệu tệp được tải lên" });
   } catch (error: any) {
     console.error("Lỗi khi lưu tệp trên server:", error);
-    return res.status(500).json({ error: "Không thể lưu tệp: " + error.message });
+    return res.status(500).json({ error: "Không thể lưu tệp: " + (error.message || String(error)) });
   }
 });
 

@@ -22,10 +22,14 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 export const isValidUrl = (url: string): boolean => {
-  if (!url) return false;
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+    return true;
+  }
   try {
-    // Try to parse with URL constructor
-    const parsed = new URL(url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`);
+    const parsed = new URL(trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch (e) {
     return false;
