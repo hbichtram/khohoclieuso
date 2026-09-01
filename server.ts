@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -9,7 +10,72 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+// Ensure upload directory exists
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+
+// Serve uploaded files statically
+app.use("/uploads", express.static(uploadsDir));
+
+// File Upload Fallback Endpoint
+app.post("/api/upload-file", async (req, res) => {
+  try {
+    const { fileName, fileSize, fileType, data } = req.body;
+    if (!fileName || !data) {
+      return res.status(400).json({ error: "Thiếu dữ liệu tệp" });
+    }
+
+    const cleanBaseName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniqueFileName = `${Date.now()}_${cleanBaseName}`;
+    const filePath = path.join(uploadsDir, uniqueFileName);
+
+    // Extract base64 payload
+    const matches = data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const buffer = matches && matches[2]
+      ? Buffer.from(matches[2], "base64")
+      : Buffer.from(data, "base64");
+
+    fs.writeFileSync(filePath, buffer);
+
+    const downloadUrl = `/uploads/${uniqueFileName}`;
+    return res.json({
+      success: true,
+      downloadUrl,
+      storagePath: `server_uploads/${uniqueFileName}`,
+      fileName,
+      fileSize: buffer.length,
+    });
+  } catch (error: any) {
+    console.error("Lỗi khi lưu tệp trên server:", error);
+    return res.status(500).json({ error: "Không thể lưu tệp: " + error.message });
+  }
+});
+
+// File Delete Endpoint
+app.post("/api/delete-file", (req, res) => {
+  try {
+    const { storagePath } = req.body;
+    if (!storagePath) {
+      return res.status(400).json({ error: "Thiếu đường dẫn tệp" });
+    }
+
+    const filename = path.basename(storagePath);
+    const filePath = path.join(uploadsDir, filename);
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error("Lỗi xóa tệp:", error);
+    return res.json({ success: false, error: error.message });
+  }
+});
 
 // Lazy initialization of Gemini Client
 let aiClient: GoogleGenAI | null = null;

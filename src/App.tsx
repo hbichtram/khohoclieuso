@@ -45,6 +45,7 @@ import { RecentMaterialsView } from './components/RecentMaterialsView';
 import { SubFolderView } from './components/SubFolderView';
 import { LearningPortal } from './components/LearningPortal';
 import { GradeLibraryView } from './components/GradeLibraryView';
+import { FileViewerModal } from './components/FileViewerModal';
 import { Toast } from './components/Toast';
 
 import { 
@@ -54,7 +55,8 @@ import {
   loginWithGoogle, 
   logout, 
   handleFirestoreError, 
-  OperationType 
+  OperationType,
+  deleteFileFromFirebaseStorage,
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
@@ -408,6 +410,8 @@ export default function App() {
   // Modal open states
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
+
+  const [viewingFileLink, setViewingFileLink] = useState<LinkItem | null>(null);
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
@@ -802,6 +806,13 @@ export default function App() {
           }
         }
 
+        // Clean up uploaded file in Firebase Storage if path exists
+        if (deletingLink.storagePath) {
+          await deleteFileFromFirebaseStorage(deletingLink.storagePath).catch((err) => {
+            console.warn('Xóa file từ Firebase Storage cảnh báo:', err);
+          });
+        }
+
         const updatedLinks = links.filter((l) => l.id !== deletingLink.id);
         setLinks(updatedLinks);
         StorageService.saveLinks(updatedLinks);
@@ -912,18 +923,24 @@ export default function App() {
   };
 
   const handleOpenLink = (link: LinkItem) => {
+    // Increment views
+    handleIncrementViews(link.id);
+
+    // If it's an uploaded file, open the interactive File Viewer Modal
+    if (link.isUploadedFile || link.storagePath || (link.fileName && link.fileSize)) {
+      setViewingFileLink(link);
+      return;
+    }
+
     const rawUrl = link?.url?.trim();
     if (!rawUrl || !isValidUrl(rawUrl)) {
       handleAddToast('Liên kết bài giảng chưa được cấu hình.', 'error');
       return;
     }
 
-    // Increment views
-    handleIncrementViews(link.id);
-
     // Ensure valid protocol
     let finalUrl = rawUrl;
-    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://') && !finalUrl.startsWith('/')) {
       finalUrl = 'https://' + finalUrl;
     }
 
@@ -1629,6 +1646,7 @@ export default function App() {
                         onAddToast={handleAddToast}
                         layout={settings.layout}
                         animationsEnabled={settings.animationsEnabled}
+                        onOpenFileViewer={(l) => setViewingFileLink(l)}
                       />
                     ))}
                   </AnimatePresence>
@@ -1738,6 +1756,14 @@ export default function App() {
         onSaveBannerConfig={handleSaveBannerConfig}
         onDeleteBanner={handleDeleteBanner}
         onRestoreDefaultBanner={handleRestoreDefaultBanner}
+        onAddToast={handleAddToast}
+      />
+
+      {/* 7. File Viewer & Downloader Modal */}
+      <FileViewerModal
+        isOpen={!!viewingFileLink}
+        link={viewingFileLink}
+        onClose={() => setViewingFileLink(null)}
         onAddToast={handleAddToast}
       />
 

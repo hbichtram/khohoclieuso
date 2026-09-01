@@ -35,7 +35,7 @@ service cloud.firestore {
     function isValidLinkItem(data) {
       return data.id is string && data.id.size() <= 128
           && data.title is string && data.title.size() > 0 && data.title.size() <= 500
-          && data.url is string && data.url.size() > 0 && data.url.size() <= 2048
+          && data.url is string && data.url.size() > 0 && data.url.size() <= 8192
           && data.categoryId is string && data.categoryId.size() <= 128
           && data.isFavorite is bool
           && data.isPinned is bool

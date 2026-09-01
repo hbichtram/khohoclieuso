@@ -25,10 +25,21 @@ export interface LinkItem {
   subCategoryId?: 'tinhoc3' | 'tinhoc4' | 'tinhoc5' | '';
   topic?: string;
   lesson?: string;
-  resourceType?: 'video' | 'lecture' | 'game' | 'exercise' | 'website' | 'software' | '';
+  resourceType?: 'video' | 'lecture' | 'game' | 'exercise' | 'website' | 'software' | 'document' | '';
   keywords?: string;
   isHidden?: boolean;
   order?: number; // Custom drag/sort ordering for teachers
+
+  // File Upload fields
+  isUploadedFile?: boolean;
+  fileName?: string;
+  fileSize?: number; // in bytes
+  fileSizeFormatted?: string; // e.g. "3.4 MB"
+  fileType?: 'pdf' | 'word' | 'powerpoint' | 'excel' | 'image' | 'video' | 'audio' | 'archive' | 'other';
+  mimeType?: string;
+  storagePath?: string; // Firebase Storage reference path
+  author?: string; // Teacher or author name
+  grade?: string; // e.g. "Lớp 3", "Lớp 4", "Lớp 5"
 }
 
 export interface BannerConfig {

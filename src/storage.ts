@@ -267,6 +267,120 @@ export const ensureAllDefaultCategories = (incomingCats: Category[]): Category[]
   return result;
 };
 
+// File helper utilities
+export const formatFileSize = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
+export const detectFileType = (
+  fileName: string,
+  mimeType?: string
+): 'pdf' | 'word' | 'powerpoint' | 'excel' | 'image' | 'video' | 'audio' | 'archive' | 'other' => {
+  if (!fileName && !mimeType) return 'other';
+  const ext = (fileName || '').split('.').pop()?.toLowerCase() || '';
+  const mime = (mimeType || '').toLowerCase();
+
+  if (ext === 'pdf' || mime.includes('pdf')) return 'pdf';
+  if (['doc', 'docx'].includes(ext) || mime.includes('word') || mime.includes('officedocument.wordprocessingml')) return 'word';
+  if (['ppt', 'pptx', 'pps', 'ppsx'].includes(ext) || mime.includes('presentation') || mime.includes('powerpoint')) return 'powerpoint';
+  if (['xls', 'xlsx', 'csv'].includes(ext) || mime.includes('sheet') || mime.includes('excel')) return 'excel';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext) || mime.startsWith('image/')) return 'image';
+  if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv'].includes(ext) || mime.startsWith('video/')) return 'video';
+  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext) || mime.startsWith('audio/')) return 'audio';
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || mime.includes('zip') || mime.includes('compressed')) return 'archive';
+  return 'other';
+};
+
+export const getFileTypeBadgeInfo = (fileType?: string) => {
+  switch (fileType) {
+    case 'pdf':
+      return {
+        label: 'Tài liệu PDF',
+        badge: 'PDF',
+        emoji: '📄',
+        color: 'text-red-600 bg-red-500/10 border-red-200 dark:border-red-900/50',
+        textColor: 'text-red-600 dark:text-red-400',
+        bgLight: 'bg-red-50 dark:bg-red-950/40',
+      };
+    case 'word':
+      return {
+        label: 'Văn bản Word',
+        badge: 'DOCX',
+        emoji: '📝',
+        color: 'text-blue-600 bg-blue-500/10 border-blue-200 dark:border-blue-900/50',
+        textColor: 'text-blue-600 dark:text-blue-400',
+        bgLight: 'bg-blue-50 dark:bg-blue-950/40',
+      };
+    case 'powerpoint':
+      return {
+        label: 'Trình chiếu PowerPoint',
+        badge: 'PPTX',
+        emoji: '📊',
+        color: 'text-orange-600 bg-orange-500/10 border-orange-200 dark:border-orange-900/50',
+        textColor: 'text-orange-600 dark:text-orange-400',
+        bgLight: 'bg-orange-50 dark:bg-orange-950/40',
+      };
+    case 'excel':
+      return {
+        label: 'Bảng tính Excel',
+        badge: 'XLSX',
+        emoji: '📈',
+        color: 'text-emerald-600 bg-emerald-500/10 border-emerald-200 dark:border-emerald-900/50',
+        textColor: 'text-emerald-600 dark:text-emerald-400',
+        bgLight: 'bg-emerald-50 dark:bg-emerald-950/40',
+      };
+    case 'video':
+      return {
+        label: 'Tệp Video bài giảng',
+        badge: 'VIDEO',
+        emoji: '🎬',
+        color: 'text-rose-600 bg-rose-500/10 border-rose-200 dark:border-rose-900/50',
+        textColor: 'text-rose-600 dark:text-rose-400',
+        bgLight: 'bg-rose-50 dark:bg-rose-950/40',
+      };
+    case 'audio':
+      return {
+        label: 'Tệp Âm thanh',
+        badge: 'AUDIO',
+        emoji: '🎵',
+        color: 'text-purple-600 bg-purple-500/10 border-purple-200 dark:border-purple-900/50',
+        textColor: 'text-purple-600 dark:text-purple-400',
+        bgLight: 'bg-purple-50 dark:bg-purple-950/40',
+      };
+    case 'image':
+      return {
+        label: 'Hình ảnh học tập',
+        badge: 'ẢNH',
+        emoji: '🖼️',
+        color: 'text-cyan-600 bg-cyan-500/10 border-cyan-200 dark:border-cyan-900/50',
+        textColor: 'text-cyan-600 dark:text-cyan-400',
+        bgLight: 'bg-cyan-50 dark:bg-cyan-950/40',
+      };
+    case 'archive':
+      return {
+        label: 'Tệp Nén (Zip/Rar)',
+        badge: 'ZIP',
+        emoji: '📦',
+        color: 'text-amber-600 bg-amber-500/10 border-amber-200 dark:border-amber-900/50',
+        textColor: 'text-amber-600 dark:text-amber-400',
+        bgLight: 'bg-amber-50 dark:bg-amber-950/40',
+      };
+    default:
+      return {
+        label: 'Tệp đính kèm',
+        badge: 'TỆP',
+        emoji: '📁',
+        color: 'text-zinc-600 bg-zinc-500/10 border-zinc-200 dark:border-zinc-800',
+        textColor: 'text-zinc-600 dark:text-zinc-400',
+        bgLight: 'bg-zinc-50 dark:bg-zinc-800',
+      };
+  }
+};
+
 // Storage Service Class
 export const normalizeLinkItem = (payload: Partial<LinkItem> & Record<string, any>): LinkItem => {
   const now = new Date().toISOString();
@@ -275,9 +389,14 @@ export const normalizeLinkItem = (payload: Partial<LinkItem> & Record<string, an
   const resolvedCatId = resolveLinkCategoryId(payload);
   const defCat = DEFAULT_CATEGORIES.find((c) => c.id === resolvedCatId);
 
+  // Auto detect file type if uploaded file
+  const isUploadedFile = Boolean(payload.isUploadedFile || payload.storagePath || (payload.fileName && payload.fileSize));
+  const detectedType = payload.fileType || (payload.fileName ? detectFileType(payload.fileName, payload.mimeType) : undefined);
+  const formattedSize = payload.fileSizeFormatted || (payload.fileSize ? formatFileSize(payload.fileSize) : undefined);
+
   return {
     id,
-    title: payload.title?.trim() || 'Học liệu mới',
+    title: payload.title?.trim() || (payload.fileName ? payload.fileName.replace(/\.[^/.]+$/, '') : 'Học liệu mới'),
     url: cleanUrl,
     description: payload.description?.trim() || '',
     categoryId: resolvedCatId,
@@ -297,6 +416,17 @@ export const normalizeLinkItem = (payload: Partial<LinkItem> & Record<string, an
     keywords: payload.keywords?.trim() || '',
     isHidden: Boolean(payload.isHidden),
     order: typeof payload.order === 'number' ? payload.order : 0,
+
+    // File Upload fields
+    isUploadedFile,
+    fileName: payload.fileName?.trim() || '',
+    fileSize: typeof payload.fileSize === 'number' ? payload.fileSize : undefined,
+    fileSizeFormatted: formattedSize,
+    fileType: detectedType,
+    mimeType: payload.mimeType || '',
+    storagePath: payload.storagePath || '',
+    author: payload.author?.trim() || '',
+    grade: payload.grade?.trim() || '',
   };
 };
 
