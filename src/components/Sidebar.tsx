@@ -329,12 +329,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (onGoHome) {
                 onGoHome();
               } else {
-                onChangeFilter('all');
-                onSelectCategory(null);
-                onSelectSubCategory(null);
-                if (window.location.hash) {
-                  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-                }
+                window.location.hash = '#/';
               }
             }}
             className={`w-full relative flex items-center ${
@@ -393,9 +388,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* 2. HỌC LIỆU MỚI (Second - Nổi bật học liệu mới) */}
           <button
             onClick={() => {
-              onChangeFilter('recent');
-              onSelectCategory(null);
-              onSelectSubCategory(null);
               window.location.hash = '#/new-materials';
             }}
             className={`w-full relative flex items-center ${
@@ -454,9 +446,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* 3. BẢNG THỐNG KÊ (Third - Thống kê & Dashboard) */}
           <button
             onClick={() => {
-              onChangeFilter('dashboard');
-              onSelectCategory(null);
-              onSelectSubCategory(null);
               window.location.hash = '#/dashboard';
             }}
             className={`w-full relative flex items-center ${

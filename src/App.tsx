@@ -350,12 +350,13 @@ export default function App() {
   };
 
   const handleBackToPortal = () => {
-    setActiveGradeLibrary(null);
-    setActiveCategoryId(null);
-    setActiveSubCategoryId(null);
-    setActiveFilter('all');
-    if (window.location.hash) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (window.location.hash && window.location.hash !== '#/' && window.location.hash !== '#') {
+      window.location.hash = '#/';
+    } else {
+      setActiveGradeLibrary(null);
+      setActiveCategoryId(null);
+      setActiveSubCategoryId(null);
+      setActiveFilter('all');
     }
     const scrollArea = document.getElementById('scrollable-content-area');
     if (scrollArea) scrollArea.scrollTop = 0;
@@ -1472,88 +1473,118 @@ export default function App() {
 
         {/* Content Box */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6" id="scrollable-content-area">
-          {activeGradeLibrary ? (
-            /* DEDICATED GRADE LIBRARY VIEW (TIN HỌC 3, 4, 5) */
-            <GradeLibraryView
-              grade={activeGradeLibrary}
-              links={links}
-              category={categories.find(c => c.id === 'cat-work' || c.id === 'cat-tech' || c.name?.toLowerCase().includes('e-learning'))}
-              role={role}
-              settings={settings}
-              onBack={handleBackToPortal}
-              onOpenLink={handleOpenLink}
-              onEditLink={(link) => {
-                setEditingLink(link);
-                setIsAddEditOpen(true);
-              }}
-              onDeleteLink={(link) => {
-                setDeletingLink(link);
-                setIsDeleteConfirmOpen(true);
-              }}
-              onAddLink={() => {
-                setEditingLink(null);
-                setIsAddEditOpen(true);
-              }}
-              onToggleFavorite={handleToggleFavorite}
-              onTogglePinned={handleTogglePinned}
-              onAddToast={handleAddToast}
-            />
-          ) : activeFilter === 'recent' ? (
-            /* HỌC LIỆU MỚI (Dedicated Standalone Recent Materials Page) */
-            <div className="max-w-6xl mx-auto">
-              <RecentMaterialsView
-                links={links}
-                categories={categories}
-                role={role}
-                settings={settings}
-                isLoading={loadingFirebase}
-                onOpenLink={handleOpenLink}
-                onEditLink={(link) => {
-                  setEditingLink(link);
-                  setIsAddEditOpen(true);
-                }}
-                onDeleteLink={(link) => {
-                  setDeletingLink(link);
-                  setIsDeleteConfirmOpen(true);
-                }}
-                onToggleFavorite={handleToggleFavorite}
-                onTogglePinned={handleTogglePinned}
-                onAddToast={handleAddToast}
-                onAddNewLink={() => {
-                  setEditingLink(null);
-                  setIsAddEditOpen(true);
-                }}
-                onBackToPortal={handleBackToPortal}
-              />
-            </div>
-          ) : activeFilter === 'dashboard' ? (
-            /* BẢNG THỐNG KÊ (Dashboard Analytics View) */
-            <div className="max-w-6xl mx-auto">
-              <Dashboard
-                links={links}
-                tinhoc3Links={tinhoc3Links}
-                tinhoc4Links={tinhoc4Links}
-                tinhoc5Links={tinhoc5Links}
-                categories={categories}
-                role={role}
-                settings={settings}
-                onOpenLink={handleOpenLink}
-                onNavigateGrade={handleOpenGradeLibrary}
-                onNavigateCategory={(catId) => {
-                  setActiveCategoryId(catId);
-                  setActiveFilter('all');
-                  setActiveGradeLibrary(null);
-                  if (window.location.hash) {
-                    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-                  }
-                }}
-                onBackToPortal={handleBackToPortal}
-              />
-            </div>
-          ) : (
-            /* Links Directory Workspace view */
-            <div className="max-w-6xl mx-auto space-y-6">
-              {/* Clean Digital Learning Portal Banner ("HỌC LIỆU SỐ MÔN TIN HỌC" & "Kết nối tri thức - Chạm tới tương lai") */}
+          <AnimatePresence mode="wait" initial={false}>
+            {activeGradeLibrary ? (
+              /* DEDICATED GRADE LIBRARY VIEW (TIN HỌC 3, 4, 5) */
+              <motion.div
+                key={`grade-library-${activeGradeLibrary}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: settings.animationsEnabled ? 0.2 : 0 }}
+              >
+                <GradeLibraryView
+                  grade={activeGradeLibrary}
+                  links={links}
+                  category={categories.find(c => c.id === 'cat-work' || c.id === 'cat-tech' || c.name?.toLowerCase().includes('e-learning'))}
+                  role={role}
+                  settings={settings}
+                  onBack={handleBackToPortal}
+                  onOpenLink={handleOpenLink}
+                  onEditLink={(link) => {
+                    setEditingLink(link);
+                    setIsAddEditOpen(true);
+                  }}
+                  onDeleteLink={(link) => {
+                    setDeletingLink(link);
+                    setIsDeleteConfirmOpen(true);
+                  }}
+                  onAddLink={() => {
+                    setEditingLink(null);
+                    setIsAddEditOpen(true);
+                  }}
+                  onToggleFavorite={handleToggleFavorite}
+                  onTogglePinned={handleTogglePinned}
+                  onAddToast={handleAddToast}
+                />
+              </motion.div>
+            ) : activeFilter === 'recent' ? (
+              /* HỌC LIỆU MỚI (Dedicated Standalone Recent Materials Page) */
+              <motion.div
+                key="view-recent-materials"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: settings.animationsEnabled ? 0.2 : 0 }}
+                className="max-w-6xl mx-auto"
+              >
+                <RecentMaterialsView
+                  links={links}
+                  categories={categories}
+                  role={role}
+                  settings={settings}
+                  isLoading={loadingFirebase}
+                  onOpenLink={handleOpenLink}
+                  onEditLink={(link) => {
+                    setEditingLink(link);
+                    setIsAddEditOpen(true);
+                  }}
+                  onDeleteLink={(link) => {
+                    setDeletingLink(link);
+                    setIsDeleteConfirmOpen(true);
+                  }}
+                  onToggleFavorite={handleToggleFavorite}
+                  onTogglePinned={handleTogglePinned}
+                  onAddToast={handleAddToast}
+                  onAddNewLink={() => {
+                    setEditingLink(null);
+                    setIsAddEditOpen(true);
+                  }}
+                  onBackToPortal={handleBackToPortal}
+                />
+              </motion.div>
+            ) : activeFilter === 'dashboard' ? (
+              /* BẢNG THỐNG KÊ (Dashboard Analytics View) */
+              <motion.div
+                key="view-dashboard"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: settings.animationsEnabled ? 0.2 : 0 }}
+                className="max-w-6xl mx-auto"
+              >
+                <Dashboard
+                  links={links}
+                  tinhoc3Links={tinhoc3Links}
+                  tinhoc4Links={tinhoc4Links}
+                  tinhoc5Links={tinhoc5Links}
+                  categories={categories}
+                  role={role}
+                  settings={settings}
+                  onOpenLink={handleOpenLink}
+                  onNavigateGrade={handleOpenGradeLibrary}
+                  onNavigateCategory={(catId) => {
+                    setActiveCategoryId(catId);
+                    setActiveFilter('all');
+                    setActiveGradeLibrary(null);
+                    if (window.location.hash) {
+                      window.location.hash = '#/';
+                    }
+                  }}
+                  onBackToPortal={handleBackToPortal}
+                />
+              </motion.div>
+            ) : (
+              /* Links Directory Workspace view */
+              <motion.div
+                key="view-portal-home"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: settings.animationsEnabled ? 0.2 : 0 }}
+                className="max-w-6xl mx-auto space-y-6"
+              >
+                {/* Clean Digital Learning Portal Banner ("HỌC LIỆU SỐ MÔN TIN HỌC" & "Kết nối tri thức - Chạm tới tương lai") */}
               <div 
                 className="relative rounded-[24px] overflow-hidden shadow-lg border border-blue-200/50 dark:border-blue-900/30 text-white min-h-[170px] md:min-h-[190px] p-6 md:p-8 flex flex-col items-center justify-center text-center transition-all bg-zinc-900"
                 style={{
@@ -1848,8 +1879,9 @@ export default function App() {
                   </button>
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </main>
 
