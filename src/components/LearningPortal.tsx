@@ -29,21 +29,21 @@ export const LearningPortal: React.FC<LearningPortalProps> = ({
   // Find matching categories
   const gameCategory = categories.find(
     (c) =>
-      c.name.toLowerCase().includes('trò chơi') ||
-      c.name.toLowerCase().includes('game') ||
+      c.name?.toLowerCase().includes('trò chơi') ||
+      c.name?.toLowerCase().includes('game') ||
       c.id === 'cat-ent'
   );
 
   const videoCategory = categories.find(
-    (c) => c.id === 'cat-video' || c.name.toLowerCase().includes('video')
+    (c) => c.id === 'cat-video' || c.name?.toLowerCase().includes('video')
   );
 
   const docCategory = categories.find(
-    (c) => c.id === 'cat-doc' || c.name.toLowerCase().includes('tài liệu')
+    (c) => c.id === 'cat-doc' || c.name?.toLowerCase().includes('tài liệu')
   );
 
   const elearningCategory = categories.find(
-    (c) => c.id === 'cat-work' || c.id === 'cat-tech' || c.name.toLowerCase().includes('e-learning') || c.name.toLowerCase().includes('tin học')
+    (c) => c.id === 'cat-work' || c.id === 'cat-tech' || c.name?.toLowerCase().includes('e-learning') || c.name?.toLowerCase().includes('tin học')
   );
 
   // Calculate dynamic counts

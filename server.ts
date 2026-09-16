@@ -5,11 +5,40 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import multer from "multer";
+import { initializeApp as initServerFirebase } from "firebase/app";
+import {
+  initializeFirestore as initServerFirestore,
+  doc,
+  getDoc,
+  collection,
+  getDocs,
+  deleteDoc
+} from "firebase/firestore";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Initialize Server-side Firebase Firestore for multi-device file distribution
+let serverDb: any = null;
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    if (config && config.apiKey) {
+      const serverFirebaseApp = initServerFirebase(config, "server-cloud-app");
+      serverDb = initServerFirestore(
+        serverFirebaseApp,
+        {},
+        config.firestoreDatabaseId || "(default)"
+      );
+      console.log("Server Firestore connected successfully for file streaming.");
+    }
+  }
+} catch (e) {
+  console.warn("Server Firestore initialization warning:", e);
+}
 
 // Ensure upload directory exists
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -107,12 +136,75 @@ app.post("/api/upload-file", uploadMiddleware.single("file"), (req, res) => {
   }
 });
 
+// Cloud Stream File Endpoint: Streams file chunks from Cloud Firestore
+app.get("/api/files/:fileId", async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    if (!fileId) return res.status(400).send("Thiếu mã tệp (fileId)");
+
+    if (!serverDb) {
+      return res.status(503).send("Dịch vụ dữ liệu đám mây Firestore chưa sẵn sàng.");
+    }
+
+    const fileDocRef = doc(serverDb, "files", fileId);
+    const fileDoc = await getDoc(fileDocRef);
+    if (!fileDoc.exists()) {
+      return res.status(404).send("Tệp học liệu không tồn tại hoặc đã bị xóa.");
+    }
+
+    const fileMeta = fileDoc.data();
+    const chunksSnap = await getDocs(collection(serverDb, "files", fileId, "chunks"));
+    const chunks: { index: number; data: string }[] = [];
+    chunksSnap.forEach((docSnap) => {
+      chunks.push(docSnap.data() as { index: number; data: string });
+    });
+    chunks.sort((a, b) => a.index - b.index);
+
+    let fullBase64 = "";
+    for (const c of chunks) {
+      fullBase64 += c.data;
+    }
+    const fileBuffer = Buffer.from(fullBase64, "base64");
+
+    const mime = fileMeta.mimeType || "application/octet-stream";
+    const filename = fileMeta.fileName || `hoc_lieu_${fileId}`;
+
+    res.setHeader("Content-Type", mime);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename*=UTF-8''${encodeURIComponent(filename)}`
+    );
+    res.setHeader("Content-Length", fileBuffer.length);
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res.send(fileBuffer);
+  } catch (err: any) {
+    console.error("Lỗi khi tải tệp từ Firestore:", err);
+    return res.status(500).send("Lỗi máy chủ khi đọc tệp đám mây: " + (err.message || String(err)));
+  }
+});
+
 // File Delete Endpoint
-app.post("/api/delete-file", (req, res) => {
+app.post("/api/delete-file", async (req, res) => {
   try {
     const { storagePath } = req.body;
     if (!storagePath) {
       return res.status(400).json({ error: "Thiếu đường dẫn tệp" });
+    }
+
+    // Handle Firestore chunked files
+    if (storagePath.startsWith("firestore_files/") && serverDb) {
+      const fileId = storagePath.replace("firestore_files/", "");
+      const metaRef = doc(serverDb, "files", fileId);
+      const metaSnap = await getDoc(metaRef);
+      if (metaSnap.exists()) {
+        const total = metaSnap.data().totalChunks || 1;
+        for (let i = 0; i < total; i++) {
+          await deleteDoc(doc(serverDb, "files", fileId, "chunks", String(i))).catch(() => {});
+        }
+        await deleteDoc(metaRef);
+      }
+      return res.json({ success: true });
     }
 
     const filename = path.basename(storagePath);

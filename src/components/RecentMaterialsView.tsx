@@ -46,6 +46,7 @@ interface RecentMaterialsViewProps {
 const RESOURCE_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
   video: { label: 'Video', icon: '🎥' },
   lecture: { label: 'Bài giảng', icon: '📖' },
+  document: { label: 'Tài liệu', icon: '📄' },
   game: { label: 'Trò chơi', icon: '🎮' },
   exercise: { label: 'Bài tập', icon: '📝' },
   website: { label: 'Website', icon: '🌐' },

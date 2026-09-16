@@ -364,14 +364,15 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
     let finalFileSize = uploadedFileSize;
     let isUploaded = entryMode === 'file';
 
-    // If file mode and a new file is chosen, upload to server / Firebase Storage
+    // Chế độ tệp (File Upload): Tải trực tiếp lên Firebase Storage để phân phối qua đám mây cho mọi máy tính
     if (entryMode === 'file') {
       if (selectedFile) {
         setIsUploading(true);
         setUploadProgress(5);
-        onAddToast('Bắt đầu tải tệp lên hệ thống...', 'info');
+        onAddToast('Đang tải tệp lên Firebase Storage đám mây...', 'info');
 
         try {
+          // Gọi hàm uploadFileToFirebaseStorage để nhận Download URL (bắt đầu bằng https://firebasestorage.googleapis.com/...)
           const uploadRes = await uploadFileToFirebaseStorage(selectedFile, (pct) => {
             setUploadProgress(pct);
           });
@@ -382,18 +383,18 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
           finalFileSize = uploadRes.fileSize || selectedFile.size;
           isUploaded = true;
 
-          onAddToast('Tải lên thành công!', 'success');
+          onAddToast('Đã tải tệp lên Firebase Storage thành công!', 'success');
         } catch (uploadError: any) {
-          console.error('Lỗi upload file:', uploadError);
+          console.error('Lỗi khi tải tệp lên Firebase Storage:', uploadError);
           setIsUploading(false);
-          const errorMsg = uploadError?.message || 'Không thể tải tệp lên. Vui lòng thử lại!';
+          const errorMsg = uploadError?.message || 'Không thể tải tệp lên Firebase Storage. Vui lòng thử lại!';
           onAddToast(`Lỗi tải tệp: ${errorMsg}`, 'error');
           return;
         } finally {
           setIsUploading(false);
         }
       } else if (uploadedFileUrl) {
-        // Keeping existing file in edit mode
+        // Giữ nguyên file cũ đã được tải lên trước đó
         finalUrl = uploadedFileUrl;
         isUploaded = true;
       } else {

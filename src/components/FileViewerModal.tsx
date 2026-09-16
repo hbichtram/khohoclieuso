@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -16,9 +16,11 @@ import {
   Share2,
   Copy,
   Info,
+  Loader2,
 } from 'lucide-react';
 import { LinkItem } from '../types';
 import { getFileTypeBadgeInfo, formatFileSize } from '../storage';
+import { getFileBlobFromFirestore } from '../firebase';
 
 interface FileViewerModalProps {
   isOpen: boolean;
@@ -34,6 +36,41 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
   onAddToast,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loadingBlob, setLoadingBlob] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let urlCreated: string | null = null;
+
+    if (isOpen && link && link.storagePath?.startsWith('firestore_files/')) {
+      const fileId = link.storagePath.replace('firestore_files/', '');
+      setLoadingBlob(true);
+      getFileBlobFromFirestore(fileId)
+        .then((res) => {
+          if (active && res) {
+            urlCreated = URL.createObjectURL(res.blob);
+            setBlobUrl(urlCreated);
+          }
+        })
+        .catch((err) => {
+          console.warn('Lỗi khi nạp blob từ Firestore:', err);
+        })
+        .finally(() => {
+          if (active) setLoadingBlob(false);
+        });
+    } else {
+      setBlobUrl(null);
+      setLoadingBlob(false);
+    }
+
+    return () => {
+      active = false;
+      if (urlCreated) {
+        URL.revokeObjectURL(urlCreated);
+      }
+    };
+  }, [isOpen, link]);
 
   if (!isOpen || !link) return null;
 
@@ -45,10 +82,30 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
   const isPdf = fileType === 'pdf';
   const isOffice = ['word', 'powerpoint', 'excel'].includes(fileType);
 
-  const handleDownload = () => {
+  const effectiveUrl = blobUrl || link.url;
+
+  const handleDownload = async () => {
     try {
+      if (link.storagePath?.startsWith('firestore_files/') && !blobUrl) {
+        onAddToast('Đang tải dữ liệu tệp từ đám mây...', 'info');
+        const fileId = link.storagePath.replace('firestore_files/', '');
+        const res = await getFileBlobFromFirestore(fileId);
+        if (res) {
+          const tempUrl = URL.createObjectURL(res.blob);
+          const a = document.createElement('a');
+          a.href = tempUrl;
+          a.download = link.fileName || link.title || 'hoc_lieu';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(tempUrl), 2000);
+          onAddToast('Đã tải xuống tệp học liệu thành công!', 'success');
+          return;
+        }
+      }
+
       const a = document.createElement('a');
-      a.href = link.url;
+      a.href = effectiveUrl;
       a.download = link.fileName || link.title || 'hoc_lieu';
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
@@ -57,7 +114,7 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
       document.body.removeChild(a);
       onAddToast('Đang tải xuống tệp học liệu...', 'info');
     } catch (e) {
-      window.open(link.url, '_blank');
+      window.open(effectiveUrl, '_blank');
     }
   };
 
@@ -69,7 +126,7 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
   };
 
   const handleOpenDirect = () => {
-    window.open(link.url, '_blank', 'noopener,noreferrer');
+    window.open(effectiveUrl, '_blank', 'noopener,noreferrer');
   };
 
   const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(link.url)}&embedded=true`;
@@ -160,10 +217,17 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
 
           {/* Body Viewer */}
           <div className="flex-1 overflow-y-auto bg-zinc-100 dark:bg-zinc-950 p-4 flex flex-col items-center justify-center min-h-[350px]">
-            {isImage && (
+            {loadingBlob && (
+              <div className="flex flex-col items-center justify-center gap-3 py-12">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <p className="text-xs text-zinc-500 font-medium">Đang tải và lắp ráp dữ liệu tệp từ đám mây...</p>
+              </div>
+            )}
+
+            {!loadingBlob && isImage && (
               <div className="max-w-full max-h-[65vh] flex items-center justify-center">
                 <img
-                  src={link.url}
+                  src={effectiveUrl}
                   alt={link.title}
                   className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-lg"
                   referrerPolicy="no-referrer"
@@ -171,10 +235,10 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
               </div>
             )}
 
-            {isVideo && (
+            {!loadingBlob && isVideo && (
               <div className="w-full max-w-3xl aspect-video rounded-xl overflow-hidden shadow-2xl bg-black flex items-center justify-center">
                 <video
-                  src={link.url}
+                  src={effectiveUrl}
                   controls
                   autoPlay
                   className="w-full h-full object-contain"
@@ -184,7 +248,7 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
               </div>
             )}
 
-            {isAudio && (
+            {!loadingBlob && isAudio && (
               <div className="w-full max-w-md bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center text-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
                   <Music className="w-8 h-8" />
@@ -193,21 +257,21 @@ export const FileViewerModal: React.FC<FileViewerModalProps> = ({
                   <h4 className="font-bold text-zinc-900 dark:text-zinc-100">{link.title}</h4>
                   <p className="text-xs text-zinc-500 mt-1">{link.fileName || 'Tệp âm thanh bài học'}</p>
                 </div>
-                <audio src={link.url} controls className="w-full mt-2" />
+                <audio src={effectiveUrl} controls className="w-full mt-2" />
               </div>
             )}
 
-            {isPdf && (
+            {!loadingBlob && isPdf && (
               <div className="w-full h-[65vh] rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white shadow-inner">
                 <iframe
-                  src={`${link.url}#toolbar=1`}
+                  src={`${effectiveUrl}#toolbar=1`}
                   className="w-full h-full border-none"
                   title={link.title}
                 />
               </div>
             )}
 
-            {isOffice && (
+            {!loadingBlob && isOffice && (
               <div className="w-full h-[65vh] flex flex-col items-center justify-center rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center mb-4">
                   {fileType === 'word' && <FileText className="w-8 h-8" />}

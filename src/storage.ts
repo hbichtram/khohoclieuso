@@ -25,7 +25,13 @@ export const isValidUrl = (url: string): boolean => {
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+  if (
+    trimmed.startsWith('/uploads/') ||
+    trimmed.startsWith('/api/files/') ||
+    trimmed.startsWith('/api/') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:')
+  ) {
     return true;
   }
   try {
@@ -499,177 +505,13 @@ export const StorageService = {
         }
       }
 
-      // If still empty, return starter links
+      // If still empty, return empty array without generating mock data to prevent overwrite
       if (linksList.length === 0) {
-        const starterLinks: LinkItem[] = [
-          {
-            id: 'tinhoc3-starter-1',
-            title: 'Học gõ 10 ngón - TypingClub',
-            url: 'https://www.typingclub.com',
-            description: 'Phần mềm trực tuyến giúp học sinh lớp 3 luyện gõ bàn phím bằng 10 ngón tay cực nhanh và chính xác.',
-            categoryId: 'cat-work',
-            subCategoryId: 'tinhoc3',
-            lesson: 'Bài 1: Luyện gõ bàn phím 10 ngón',
-            topic: 'Chủ đề A: Máy tính và em',
-            resourceType: 'software',
-            color: '#3B82F6',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=typingclub.com',
-            notes: 'Hướng dẫn học sinh ngồi đúng tư thế và đặt tay đúng vị trí xuất phát.',
-            isFavorite: true,
-            isPinned: true,
-            viewsCount: 25,
-            createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-            updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'tinhoc4-starter-1',
-            title: 'Trang chủ lập trình Scratch',
-            url: 'https://scratch.mit.edu',
-            description: 'Nền tảng lập trình trực quan kéo thả dành cho học sinh lớp 4 làm quen với tư duy máy tính.',
-            categoryId: 'cat-work',
-            subCategoryId: 'tinhoc4',
-            lesson: 'Bài 1: Làm quen với giao diện Scratch',
-            topic: 'Chủ đề F: Giải quyết vấn đề với sự trợ giúp của máy tính',
-            resourceType: 'software',
-            color: '#10B981',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=scratch.mit.edu',
-            notes: 'Thực hành tạo tài khoản và làm quen với giao diện sân khấu.',
-            isFavorite: true,
-            isPinned: true,
-            viewsCount: 20,
-            createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-            updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'tinhoc5-starter-1',
-            title: 'Lập trình Scratch nâng cao & Sáng tạo',
-            url: 'https://scratch.mit.edu/ideas',
-            description: 'Các ý tưởng và hướng dẫn lập trình trò chơi, phim hoạt hình sáng tạo cho học sinh lớp 5.',
-            categoryId: 'cat-work',
-            subCategoryId: 'tinhoc5',
-            lesson: 'Bài 1: Dự án thiết kế trò chơi tương tác',
-            topic: 'Chủ đề F: Dự án lập trình',
-            resourceType: 'lecture',
-            color: '#F59E0B',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=scratch.mit.edu',
-            notes: 'Tập trung vào phần vẽ hình bằng bút vẽ và cấu trúc lặp.',
-            isFavorite: true,
-            isPinned: true,
-            viewsCount: 30,
-            createdAt: new Date(Date.now() - 86400000).toISOString(),
-            updatedAt: new Date(Date.now() - 86400000).toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1607799279861-4dd421887fb3?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'starter-1',
-            title: 'Google AI Studio',
-            url: 'https://aistudio.google.com',
-            description: 'Công cụ phát triển ứng dụng AI nhanh chóng với Gemini.',
-            categoryId: 'cat-ai',
-            color: '#EC4899',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=aistudio.google.com',
-            notes: 'Môi trường phát triển ứng dụng bằng mô hình Gemini mới nhất.',
-            isFavorite: true,
-            isPinned: false,
-            viewsCount: 42,
-            createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
-            updatedAt: new Date(Date.now() - 86400000 * 4).toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'starter-2',
-            title: 'Kênh Video Tin Học Tiểu Học',
-            url: 'https://www.youtube.com',
-            description: 'Tuyển tập video hướng dẫn bài học Tin học tiểu học trực quan sinh động.',
-            categoryId: 'cat-video',
-            resourceType: 'video',
-            color: '#EF4444',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=youtube.com',
-            notes: 'Video bài giảng ngắn gọn cho học sinh tự học tại nhà.',
-            isFavorite: true,
-            isPinned: false,
-            viewsCount: 18,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'starter-3',
-            title: 'Tài liệu hướng dẫn Tin học & Giáo án',
-            url: 'https://vietjack.com',
-            description: 'Kho tư liệu giáo án, phiếu bài tập rèn luyện kỹ năng Tin học các khối lớp.',
-            categoryId: 'cat-doc',
-            resourceType: 'lecture',
-            color: '#06B6D4',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=vietjack.com',
-            notes: 'Tham khảo tài liệu và câu hỏi trắc nghiệm.',
-            isFavorite: false,
-            isPinned: false,
-            viewsCount: 12,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'starter-4',
-            title: 'Hành Trang Số - Sách Giáo Khoa Điện Tử',
-            url: 'https://hanhtrangso.nxbgd.vn',
-            description: 'Nền tảng sách giáo khoa và tài liệu bổ trợ Tin học số hoá của Nhà xuất bản Giáo dục Việt Nam.',
-            categoryId: 'cat-web',
-            color: '#F59E0B',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=hanhtrangso.nxbgd.vn',
-            notes: 'Học sinh có thể xem trực tuyến toàn bộ sách giáo khoa và bài tập tương tác.',
-            isFavorite: false,
-            isPinned: false,
-            viewsCount: 15,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'starter-5',
-            title: 'Code.org - Trò chơi Lập trình Hour of Code',
-            url: 'https://code.org',
-            description: 'Các trò chơi mê cung, giải đố logic giúp học sinh luyện tư duy thuật toán thông qua trò chơi hấp dẫn.',
-            categoryId: 'cat-game',
-            resourceType: 'game',
-            color: '#10B981',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=code.org',
-            notes: 'Thực hành các màn chơi giải cứu nhân vật bằng câu lệnh khối.',
-            isFavorite: true,
-            isPinned: false,
-            viewsCount: 28,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80',
-          },
-          {
-            id: 'starter-6',
-            title: 'Tự học Kỹ năng Tin học Văn phòng & Máy tính',
-            url: 'https://hocit.vn',
-            description: 'Hướng dẫn tổng hợp về phần cứng, phần mềm và kỹ năng sử dụng máy tính an toàn cho trẻ em.',
-            categoryId: 'cat-tech',
-            color: '#8B5CF6',
-            favicon: 'https://www.google.com/s2/favicons?sz=64&domain=google.com',
-            notes: 'Bổ trợ kiến thức máy tính và an toàn mạng.',
-            isFavorite: false,
-            isPinned: false,
-            viewsCount: 14,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            imageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80',
-          }
-        ];
-        this.saveLinks(starterLinks);
-        return starterLinks;
+        return [];
       }
 
       // Ensure all links have categoryId mapped properly
       const normalized = linksList.map((l) => normalizeLinkItem(l));
-
-      this.saveLinks(normalized);
       return normalized;
     } catch (e) {
       console.error('Error loading links', e);

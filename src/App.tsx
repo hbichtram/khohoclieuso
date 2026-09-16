@@ -19,6 +19,9 @@ import {
   Eye,
   Lock,
   Camera,
+  Cloud,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
 import { LinkItem, Category, Settings, ToastMessage, BannerConfig, DEFAULT_BANNER_CONFIG } from './types';
@@ -62,7 +65,8 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
 
 export default function App() {
-  // Load initial configurations from StorageService (Unified Single Source of Truth)
+  // Khởi tạo state: Ưu tiên Firestore là "Single Source of Truth" (Nguồn chân lý duy nhất).
+  // StorageService (localStorage) chỉ đóng vai trò bộ nhớ đệm cache offline ban đầu khi tải ứng dụng.
   const [links, setLinks] = useState<LinkItem[]>(() => StorageService.getLinks());
   const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
   const [settings, setSettings] = useState<Settings>(() => StorageService.getSettings());
@@ -89,22 +93,48 @@ export default function App() {
     setIsAvatarModalOpen(true);
   };
 
-  const handleSaveAvatar = (newAvatarDataUrl: string) => {
+  const handleSaveAvatar = async (newAvatarDataUrl: string) => {
     if (role !== 'admin') {
       handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
       return;
     }
     StorageService.saveAvatar(newAvatarDataUrl);
     setAvatarUrl(newAvatarDataUrl);
+
+    if (db) {
+      try {
+        await setDoc(doc(db, 'app_config', 'teacher_avatar'), {
+          avatarUrl: newAvatarDataUrl,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Lỗi lưu ảnh đại diện lên Firestore:', e);
+      }
+    } else {
+      console.error('Lỗi: Firestore db chưa kết nối! Ảnh đại diện chỉ được lưu trên máy này.');
+    }
   };
 
-  const handleDeleteAvatar = () => {
+  const handleDeleteAvatar = async () => {
     if (role !== 'admin') {
       handleAddToast('Từ chối thao tác! Bạn không có quyền Quản trị.', 'error');
       return;
     }
     StorageService.deleteAvatar();
     setAvatarUrl(null);
+
+    if (db) {
+      try {
+        await setDoc(doc(db, 'app_config', 'teacher_avatar'), {
+          avatarUrl: null,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Lỗi xóa ảnh đại diện trên Firestore:', e);
+      }
+    } else {
+      console.error('Lỗi: Firestore db chưa kết nối!');
+    }
   };
 
   // Banner Background state & Position Configuration (Shared between Admin & Viewer)
@@ -112,45 +142,9 @@ export default function App() {
   const [bannerConfig, setBannerConfig] = useState<BannerConfig>(() => StorageService.getBannerConfig());
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
 
-  // 1. Realtime Shared App & Banner Configuration listener (runs for BOTH Admin & Viewer)
-  useEffect(() => {
-    if (!isConfigured || !db) return;
-
-    const bannerDocRef = doc(db, 'app_config', 'banner');
-    const unsubSharedBanner = onSnapshot(
-      bannerDocRef,
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          const cloudConfig: BannerConfig = {
-            posX: typeof data.posX === 'number' ? data.posX : 50,
-            posY: typeof data.posY === 'number' ? data.posY : 50,
-            scale: typeof data.scale === 'number' ? data.scale : 100,
-            marginTop: typeof data.marginTop === 'number' ? data.marginTop : 0,
-            marginBottom: typeof data.marginBottom === 'number' ? data.marginBottom : 24,
-            bgUrl: data.bgUrl !== undefined ? data.bgUrl : null,
-          };
-          const cloudBgUrl = data.bgUrl || null;
-
-          setBannerConfig(cloudConfig);
-          setBannerBgUrl(cloudBgUrl);
-
-          // Update local cache so offline/subsequent reloads are instantaneous
-          StorageService.saveBannerConfig(cloudConfig);
-          if (cloudBgUrl) {
-            StorageService.saveBanner(cloudBgUrl);
-          } else {
-            StorageService.deleteBanner();
-          }
-        }
-      },
-      (error) => {
-        console.warn('Could not sync shared banner config from Firestore:', error);
-      }
-    );
-
-    return () => unsubSharedBanner();
-  }, []);
+  // Initial cloud synchronization state
+  const [isInitialSyncing, setIsInitialSyncing] = useState<boolean>(true);
+  const [syncStatusText, setSyncStatusText] = useState<string>('Đang đồng bộ dữ liệu học liệu từ đám mây...');
 
   const handleOpenBannerModal = () => {
     if (role !== 'admin') {
@@ -173,8 +167,8 @@ export default function App() {
     };
 
     try {
-      // 1. Write to Shared Firestore Document first (shared across all devices & viewers)
-      if (isConfigured && db) {
+      // 1. Ghi lên Firestore Cloud trước để đồng bộ ngay lập tức cho tất cả thiết bị
+      if (db) {
         const bannerDocRef = doc(db, 'app_config', 'banner');
         await setDoc(bannerDocRef, {
           posX: updatedConfig.posX ?? 50,
@@ -185,6 +179,8 @@ export default function App() {
           bgUrl: finalUrl || null,
           updatedAt: new Date().toISOString(),
         });
+      } else {
+        console.error('Lỗi: Firestore db chưa kết nối! Cấu hình banner chỉ được lưu tạm trên máy này.');
       }
 
       // 2. Persist locally to storage cache
@@ -449,61 +445,73 @@ export default function App() {
       setLoadingFirebase(false);
       if (currentUser) {
         handleAddToast(`Chào mừng Admin: ${currentUser.displayName || currentUser.email}!`, 'success');
-      } else {
-        // Reset to local database when logged out
-        setLinks(StorageService.getLinks());
-        setCategories(StorageService.getCategories());
-        setSettings(StorageService.getSettings());
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Realtime Cloud synchronization listeners
+  // Realtime Cloud synchronization listeners (Firestore là Single Source of Truth duy nhất)
   useEffect(() => {
-    if (!isConfigured || !db) return;
+    // Kiểm tra kết nối Firestore và thông báo lỗi rõ ràng nếu db chưa khởi tạo
+    if (!db) {
+      console.error(
+        'LỖI KẾT NỐI FIREBASE: Đối tượng Firestore "db" chưa được khởi tạo! Vui lòng kiểm tra các biến môi trường VITE_FIREBASE_* trong file .env hoặc cấu hình trong file firebase-applet-config.json.'
+      );
+      setIsInitialSyncing(false);
+      return;
+    }
 
-    // 1. Shared Global Links subscription (available to both Admins and Viewers)
+    console.log('Đang thiết lập kết nối lắng nghe Firestore Realtime (Single Source of Truth)...');
+
+    let linksSynced = false;
+    let catsSynced = false;
+    let bannerSynced = false;
+
+    const checkReady = () => {
+      if (linksSynced && catsSynced && bannerSynced) {
+        setIsInitialSyncing(false);
+      }
+    };
+
+    // Timeout an toàn: Hiển thị giao diện nếu mạng chậm hoặc offline
+    const safetyTimer = setTimeout(() => {
+      setIsInitialSyncing(false);
+    }, 3500);
+
+    // 1. Đồng bộ học liệu (Links) từ Firestore: Tự động cập nhật State và ghi đè LocalStorage cache
     const linksColRef = collection(db, 'links');
     const unsubSharedLinks = onSnapshot(
       linksColRef,
-      async (snap) => {
+      (snap) => {
+        const linksList: LinkItem[] = [];
         if (!snap.empty) {
-          const linksList: LinkItem[] = [];
           snap.forEach((docSnap) => {
             const item = docSnap.data() as Partial<LinkItem>;
             linksList.push(normalizeLinkItem({ ...item, id: docSnap.id }));
           });
-          // Sort by creation date descending by default
+          // Sắp xếp học liệu mới nhất lên đầu
           linksList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          setLinks(linksList);
-          StorageService.saveLinks(linksList);
-        } else {
-          // Initialize remote Firestore with current local links if Firestore is empty
-          const currentLinks = StorageService.getLinks();
-          if (currentLinks.length > 0) {
-            for (const link of currentLinks) {
-              const cleanData = cleanFirestoreData({
-                ...normalizeLinkItem(link),
-                userId: user?.uid || 'admin',
-              });
-              await setDoc(doc(db, 'links', link.id), cleanData).catch((err) => {
-                console.warn('Initial link seed to Firestore warning:', err);
-              });
-            }
-          }
         }
+        console.log(`Đồng bộ Firestore thành công: Nhận được ${linksList.length} học liệu từ Cloud.`);
+        // Firestore là Single Source of Truth: Ghi đè trực tiếp State và Cache LocalStorage
+        setLinks(linksList);
+        StorageService.saveLinks(linksList);
+        linksSynced = true;
+        checkReady();
       },
       (error) => {
-        console.warn('Firestore links listener warning:', error);
+        console.error('Lỗi khi lắng nghe dữ liệu học liệu (links) từ Firestore:', error);
+        handleFirestoreError(error, OperationType.LIST, 'links');
+        linksSynced = true;
+        checkReady();
       }
     );
 
-    // 2. Shared Global Categories subscription
+    // 2. Đồng bộ danh mục (Categories) từ Firestore: Ghi đè State và LocalStorage cache
     const catsColRef = collection(db, 'categories');
     const unsubSharedCategories = onSnapshot(
       catsColRef,
-      async (snap) => {
+      (snap) => {
         const catsList: Category[] = [];
         if (!snap.empty) {
           snap.forEach((docSnap) => {
@@ -518,48 +526,122 @@ export default function App() {
           });
         }
         
-        // Ensure all 7 core categories are present while preserving any custom ones
+        // Đảm bảo đủ các danh mục cốt lõi và các danh mục tự tạo
         const fullCatsList = ensureAllDefaultCategories(catsList);
+        console.log(`Đồng bộ Firestore thành công: Nhận được ${fullCatsList.length} danh mục từ Cloud.`);
+        // Firestore là Single Source of Truth: Ghi đè trực tiếp State và Cache LocalStorage
         setCategories(fullCatsList);
         StorageService.saveCategories(fullCatsList);
-
-        // If Firestore had fewer categories or was empty, persist the full set
-        if (snap.empty || fullCatsList.length > catsList.length) {
-          for (const cat of fullCatsList) {
-            const cleanData = cleanFirestoreData({
-              id: cat.id,
-              name: cat.name,
-              color: cat.color,
-              icon: cat.icon || '',
-              userId: user?.uid || 'admin',
-            });
-            await setDoc(doc(db, 'categories', cat.id), cleanData).catch((err) => {
-              console.warn('Initial category seed to Firestore warning:', err);
-            });
-          }
-        }
+        catsSynced = true;
+        checkReady();
       },
       (error) => {
-        console.warn('Firestore categories listener warning:', error);
+        console.error('Lỗi khi lắng nghe dữ liệu danh mục (categories) từ Firestore:', error);
+        handleFirestoreError(error, OperationType.LIST, 'categories');
+        catsSynced = true;
+        checkReady();
       }
     );
 
-    // 3. User settings subscription (when signed in with Google)
+    // 3. Đồng bộ Banner từ Firestore Cloud
+    const bannerDocRef = doc(db, 'app_config', 'banner');
+    const unsubBanner = onSnapshot(
+      bannerDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const bData = snap.data() as BannerConfig;
+          const cloudConfig: BannerConfig = {
+            posX: typeof bData.posX === 'number' ? bData.posX : 50,
+            posY: typeof bData.posY === 'number' ? bData.posY : 50,
+            scale: typeof bData.scale === 'number' ? bData.scale : 100,
+            marginTop: typeof bData.marginTop === 'number' ? bData.marginTop : 0,
+            marginBottom: typeof bData.marginBottom === 'number' ? bData.marginBottom : 24,
+            bgUrl: bData.bgUrl !== undefined ? bData.bgUrl : null,
+          };
+          setBannerConfig(cloudConfig);
+          setBannerBgUrl(cloudConfig.bgUrl || null);
+          StorageService.saveBannerConfig(cloudConfig);
+          if (cloudConfig.bgUrl) {
+            StorageService.saveBanner(cloudConfig.bgUrl);
+          } else {
+            StorageService.deleteBanner();
+          }
+        }
+        bannerSynced = true;
+        checkReady();
+      },
+      (err) => {
+        console.error('Lỗi khi lắng nghe cấu hình banner từ Firestore:', err);
+        bannerSynced = true;
+        checkReady();
+      }
+    );
+
+    // 4. Đồng bộ Ảnh đại diện giáo viên (Teacher Avatar) từ Firestore Cloud
+    const avatarDocRef = doc(db, 'app_config', 'teacher_avatar');
+    const unsubAvatar = onSnapshot(
+      avatarDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const aData = snap.data();
+          if (aData && aData.avatarUrl !== undefined) {
+            setAvatarUrl(aData.avatarUrl || null);
+            if (aData.avatarUrl) {
+              StorageService.saveAvatar(aData.avatarUrl);
+            } else {
+              StorageService.deleteAvatar();
+            }
+          }
+        }
+      },
+      (err) => {
+        console.error('Lỗi khi lắng nghe avatar giáo viên từ Firestore:', err);
+      }
+    );
+
+    // 5. Đồng bộ cấu hình chung (Settings) từ Firestore Cloud cho tất cả máy tính
+    const settingsDocRef = doc(db, 'app_config', 'settings');
+    const unsubSharedSettings = onSnapshot(
+      settingsDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const cloudSettings = snap.data() as Partial<Settings>;
+          setSettings((prev) => {
+            const merged = { ...prev, ...cloudSettings };
+            StorageService.saveSettings(merged);
+            return merged;
+          });
+        }
+      },
+      (err) => {
+        console.error('Lỗi khi lắng nghe cài đặt giao diện (settings) từ Firestore:', err);
+      }
+    );
+
+    // 6. Đồng bộ cài đặt người dùng khi đăng nhập
     let unsubUserSettings = () => {};
     if (user) {
-      const settingsDocRef = doc(db, 'users', user.uid);
-      unsubUserSettings = onSnapshot(settingsDocRef, (snap) => {
+      const userDocRef = doc(db, 'users', user.uid);
+      unsubUserSettings = onSnapshot(userDocRef, (snap) => {
         if (snap.exists()) {
-          setSettings((prev) => ({ ...prev, ...(snap.data() as Settings) }));
+          setSettings((prev) => {
+            const merged = { ...prev, ...(snap.data() as Settings) };
+            StorageService.saveSettings(merged);
+            return merged;
+          });
         }
       }, (err) => {
-        console.warn('User settings listener warning:', err);
+        console.error('Lỗi khi lắng nghe cài đặt người dùng từ Firestore:', err);
       });
     }
 
     return () => {
+      clearTimeout(safetyTimer);
       unsubSharedLinks();
       unsubSharedCategories();
+      unsubBanner();
+      unsubAvatar();
+      unsubSharedSettings();
       unsubUserSettings();
     };
   }, [user]);
@@ -600,10 +682,17 @@ export default function App() {
   const handleUpdateSettings = async (newSettings: Settings) => {
     setSettings(newSettings);
     StorageService.saveSettings(newSettings);
-    if (user && db) {
-      await setDoc(doc(db, 'users', user.uid), cleanFirestoreData(newSettings)).catch((err) => {
-        console.error('Lỗi khi lưu cài đặt người dùng:', err);
-      });
+    if (db) {
+      try {
+        await setDoc(doc(db, 'app_config', 'settings'), cleanFirestoreData(newSettings));
+        if (user) {
+          await setDoc(doc(db, 'users', user.uid), cleanFirestoreData(newSettings));
+        }
+      } catch (err) {
+        console.error('Lỗi khi lưu cài đặt vào Firestore:', err);
+      }
+    } else {
+      console.error('Lỗi: Firestore db chưa kết nối! Cài đặt chỉ được lưu trên máy này.');
     }
   };
 
@@ -616,13 +705,13 @@ export default function App() {
     setCategories(updatedCats);
     StorageService.saveCategories(updatedCats);
 
-    if (isConfigured && db) {
+    if (db) {
       try {
         const categoriesColRef = collection(db, 'categories');
         const currentIds = new Set(updatedCats.map((c) => c.id));
         const previousCats = categories;
 
-        // Delete removed categories
+        // Xóa các danh mục đã bị gỡ bỏ
         for (const prev of previousCats) {
           if (!currentIds.has(prev.id)) {
             await deleteDoc(doc(categoriesColRef, prev.id)).catch(() => {});
@@ -632,7 +721,7 @@ export default function App() {
           }
         }
 
-        // Save all updated categories
+        // Lưu toàn bộ danh mục cập nhật lên Firestore Cloud
         for (const cat of updatedCats) {
           const cleanCat = cleanFirestoreData({
             id: cat.id,
@@ -649,6 +738,8 @@ export default function App() {
       } catch (err) {
         console.error('Lỗi khi lưu danh mục vào Firestore:', err);
       }
+    } else {
+      console.error('Lỗi: Firestore db chưa kết nối! Danh mục chỉ lưu cục bộ.');
     }
   };
 
@@ -725,8 +816,8 @@ export default function App() {
           updatedAt: new Date().toISOString(),
         });
 
-        // 1. Write to shared Firestore database
-        if (isConfigured && db) {
+        // 1. Ghi vào Firestore Cloud (Single Source of Truth)
+        if (db) {
           const cleanDocData = cleanFirestoreData({
             ...updatedLink,
             userId: user?.uid || 'admin',
@@ -735,9 +826,11 @@ export default function App() {
           if (user) {
             await setDoc(doc(db, 'users', user.uid, 'links', editingLink.id), cleanDocData).catch(() => {});
           }
+        } else {
+          console.error('Lỗi: Firestore db chưa kết nối! Học liệu chỉ được lưu tạm trên máy này.');
         }
 
-        // 2. Update local state and cache immediately
+        // 2. Cập nhật State và cache
         const updatedLinks = links.map((l) => (l.id === editingLink.id ? updatedLink : l));
         setLinks(updatedLinks);
         StorageService.saveLinks(updatedLinks);
@@ -756,8 +849,8 @@ export default function App() {
           updatedAt: new Date().toISOString(),
         });
 
-        // 1. Write to shared Firestore database
-        if (isConfigured && db) {
+        // 1. Ghi vào Firestore Cloud (Single Source of Truth)
+        if (db) {
           const cleanDocData = cleanFirestoreData({
             ...newLink,
             userId: user?.uid || 'admin',
@@ -766,9 +859,11 @@ export default function App() {
           if (user) {
             await setDoc(doc(db, 'users', user.uid, 'links', newLinkId), cleanDocData).catch(() => {});
           }
+        } else {
+          console.error('Lỗi: Firestore db chưa kết nối! Học liệu chỉ được lưu tạm trên máy này.');
         }
 
-        // 2. Update local state and cache immediately
+        // 2. Cập nhật State và cache
         const updatedLinks = [newLink, ...links];
         setLinks(updatedLinks);
         StorageService.saveLinks(updatedLinks);
@@ -778,7 +873,7 @@ export default function App() {
 
       setEditingLink(null);
     } catch (error) {
-      console.error('Lỗi khi lưu học liệu vào database:', error);
+      console.error('Lỗi khi lưu học liệu vào Firestore:', error);
       handleAddToast('Không thể lưu học liệu. Vui lòng thử lại.', 'error');
     }
   };
@@ -799,11 +894,13 @@ export default function App() {
     }
     if (deletingLink) {
       try {
-        if (isConfigured && db) {
+        if (db) {
           await deleteDoc(doc(db, 'links', deletingLink.id));
           if (user) {
             await deleteDoc(doc(db, 'users', user.uid, 'links', deletingLink.id)).catch(() => {});
           }
+        } else {
+          console.error('Lỗi: Firestore db chưa kết nối! Không thể xóa học liệu trên Cloud.');
         }
 
         // Clean up uploaded file in Firebase Storage if path exists
@@ -848,7 +945,7 @@ export default function App() {
 
     handleAddToast(nextState ? 'Đã thêm vào danh sách yêu thích!' : 'Đã xóa khỏi danh sách yêu thích!', 'info');
 
-    if (isConfigured && db) {
+    if (db) {
       const cleanDocData = cleanFirestoreData({
         ...updatedLink,
         userId: user?.uid || 'admin',
@@ -859,6 +956,8 @@ export default function App() {
       if (user) {
         await setDoc(doc(db, 'users', user.uid, 'links', id), cleanDocData).catch(() => {});
       }
+    } else {
+      console.error('Lỗi: Firestore db chưa kết nối!');
     }
   };
 
@@ -883,7 +982,7 @@ export default function App() {
 
     handleAddToast(nextState ? 'Đã ghim liên kết lên đầu!' : 'Đã bỏ ghim liên kết!', 'info');
 
-    if (isConfigured && db) {
+    if (db) {
       const cleanDocData = cleanFirestoreData({
         ...updatedLink,
         userId: user?.uid || 'admin',
@@ -894,6 +993,8 @@ export default function App() {
       if (user) {
         await setDoc(doc(db, 'users', user.uid, 'links', id), cleanDocData).catch(() => {});
       }
+    } else {
+      console.error('Lỗi: Firestore db chưa kết nối!');
     }
   };
 
@@ -911,7 +1012,7 @@ export default function App() {
     setLinks(updatedLinks);
     StorageService.saveLinks(updatedLinks);
 
-    if (isConfigured && db) {
+    if (db) {
       const cleanDocData = cleanFirestoreData({
         ...updatedLink,
         userId: user?.uid || 'admin',
@@ -970,9 +1071,30 @@ export default function App() {
       const content = event.target?.result as string;
       const res = StorageService.importBackup(content);
       if (res.success) {
-        setLinks(StorageService.getLinks());
-        setCategories(StorageService.getCategories());
+        const newLinks = StorageService.getLinks();
+        const newCats = StorageService.getCategories();
+        setLinks(newLinks);
+        setCategories(newCats);
         setSettings(StorageService.getSettings());
+
+        // Also upload imported data to Firestore so other computers get the updated backup
+        if (isConfigured && db) {
+          (async () => {
+            try {
+              for (const l of newLinks) {
+                const cleanData = cleanFirestoreData({ ...l, userId: user?.uid || 'admin' });
+                await setDoc(doc(db, 'links', l.id), cleanData);
+              }
+              for (const c of newCats) {
+                const cleanData = cleanFirestoreData({ ...c, userId: user?.uid || 'admin' });
+                await setDoc(doc(db, 'categories', c.id), cleanData);
+              }
+            } catch (syncErr) {
+              console.warn('Lỗi khi đồng bộ file backup lên Firestore:', syncErr);
+            }
+          })();
+        }
+
         handleAddToast(res.message, 'success');
       } else {
         handleAddToast(res.message, 'error');
@@ -1111,10 +1233,10 @@ export default function App() {
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       }
       if (sortBy === 'titleAZ') {
-        return a.title.localeCompare(b.title);
+        return (a.title || '').localeCompare(b.title || '', 'vi');
       }
       if (sortBy === 'titleZA') {
-        return b.title.localeCompare(a.title);
+        return (b.title || '').localeCompare(a.title || '', 'vi');
       }
       return 0;
     });
@@ -1139,6 +1261,49 @@ export default function App() {
   const activeCategory = useMemo(() => {
     return categories.find((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
+
+  // When opening app on any device, wait for Firebase cloud synchronization before rendering main content
+  if (isInitialSyncing) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white relative overflow-hidden" id="app-sync-loading-screen">
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-500/20 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-teal-500/20 rounded-full blur-[120px] pointer-events-none"></div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35 }}
+          className="relative z-10 flex flex-col items-center text-center p-8 max-w-md w-full"
+        >
+          <div className="relative mb-6">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-teal-400 p-[2px] shadow-2xl shadow-blue-500/30 flex items-center justify-center">
+              <div className="w-full h-full bg-slate-900 rounded-[22px] flex items-center justify-center">
+                <Cloud className="w-10 h-10 text-blue-400 animate-pulse" />
+              </div>
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-emerald-500 rounded-full flex items-center justify-center ring-4 ring-slate-900 shadow-md">
+              <RefreshCw className="w-3.5 h-3.5 text-white animate-spin" />
+            </div>
+          </div>
+
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase mb-2">
+            Kho Học Liệu Số Tin Học
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mb-6">
+            Hệ thống quản trị & chia sẻ học liệu số đám mây tập trung
+          </p>
+
+          <div className="w-full bg-slate-800/90 border border-slate-700/60 rounded-2xl p-4 flex items-center gap-3.5 shadow-xl backdrop-blur-md">
+            <Loader2 className="w-5 h-5 text-blue-400 animate-spin flex-shrink-0" />
+            <div className="text-left flex-1 min-w-0">
+              <div className="text-xs font-bold text-slate-200 truncate">{syncStatusText}</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">Đồng bộ trực tuyến thời gian thực đa thiết bị</div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1312,7 +1477,7 @@ export default function App() {
             <GradeLibraryView
               grade={activeGradeLibrary}
               links={links}
-              category={categories.find(c => c.id === 'cat-work' || c.id === 'cat-tech' || c.name.toLowerCase().includes('e-learning'))}
+              category={categories.find(c => c.id === 'cat-work' || c.id === 'cat-tech' || c.name?.toLowerCase().includes('e-learning'))}
               role={role}
               settings={settings}
               onBack={handleBackToPortal}

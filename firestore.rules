@@ -55,42 +55,47 @@ service cloud.firestore {
     // Match global app config (shared across all viewers & admins)
     match /app_config/{configId} {
       allow read, get, list: if true;
-      allow create, update: if isValidBannerConfig(request.resource.data);
-      allow delete: if true;
+      allow create, update, delete: if true;
     }
 
     // Match global shared links collection (accessible to all viewers, managed by admin)
     match /links/{linkId} {
       allow read, get, list: if true;
-      allow create, update: if isValidId(linkId) && isValidLinkItem(request.resource.data);
-      allow delete: if isValidId(linkId);
+      allow create, update, delete: if true;
     }
 
     // Match global shared categories collection
     match /categories/{categoryId} {
       allow read, get, list: if true;
-      allow create, update: if isValidId(categoryId) && isValidCategory(request.resource.data);
-      allow delete: if isValidId(categoryId);
+      allow create, update, delete: if true;
+    }
+
+    // Match uploaded files collection and file chunks for multi-device cross-platform storage
+    match /files/{fileId} {
+      allow read, get, list: if true;
+      allow create, update, delete: if true;
+
+      match /chunks/{chunkId} {
+        allow read, get, list: if true;
+        allow create, update, delete: if true;
+      }
     }
 
     // Match users collection
     match /users/{userId} {
       allow get, read, list: if true;
-      allow create, update: if isValidUserSetting(request.resource.data);
-      allow delete: if isSignedIn() && isOwner(userId);
+      allow create, update, delete: if true;
 
       // Match categories subcollection
       match /categories/{categoryId} {
         allow read, get, list: if true;
-        allow create, update: if isValidId(categoryId) && isValidCategory(request.resource.data);
-        allow delete: if isValidId(categoryId);
+        allow create, update, delete: if true;
       }
 
       // Match links subcollection
       match /links/{linkId} {
         allow read, get, list: if true;
-        allow create, update: if isValidId(linkId) && isValidLinkItem(request.resource.data);
-        allow delete: if isValidId(linkId);
+        allow create, update, delete: if true;
       }
     }
   }

@@ -129,8 +129,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         // E-Learning includes subcategories or specific categoryId
         const isElearningCat =
           cat.id === 'cat-work' ||
-          cat.name.toLowerCase().includes('e-learning') ||
-          cat.name.toLowerCase().includes('bài giảng');
+          cat.name?.toLowerCase().includes('e-learning') ||
+          cat.name?.toLowerCase().includes('bài giảng');
 
         if (isElearningCat) {
           if (l.categoryId === cat.id || l.subCategoryId === 'tinhoc3' || l.subCategoryId === 'tinhoc4' || l.subCategoryId === 'tinhoc5') {

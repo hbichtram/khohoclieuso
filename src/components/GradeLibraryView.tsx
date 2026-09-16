@@ -93,14 +93,15 @@ const GRADE_CONFIGS = {
   },
 };
 
-const RESOURCE_TYPE_MAP = {
+const RESOURCE_TYPE_MAP: Record<string, { label: string; emoji: string; color: string }> = {
   video: { label: 'Video bài học', emoji: '🎥', color: 'text-red-600 bg-red-500/10 border-red-200 dark:border-red-950/40' },
   lecture: { label: 'Bài giảng', emoji: '📖', color: 'text-emerald-600 bg-emerald-500/10 border-emerald-200 dark:border-emerald-950/40' },
+  document: { label: 'Tài liệu', emoji: '📄', color: 'text-cyan-600 bg-cyan-500/10 border-cyan-200 dark:border-cyan-950/40' },
   game: { label: 'Trò chơi học tập', emoji: '🎮', color: 'text-amber-600 bg-amber-500/10 border-amber-200 dark:border-amber-950/40' },
   exercise: { label: 'Bài tập', emoji: '📝', color: 'text-purple-600 bg-purple-500/10 border-purple-200 dark:border-purple-950/40' },
   website: { label: 'Website học tập', emoji: '🌐', color: 'text-blue-600 bg-blue-500/10 border-blue-200 dark:border-blue-950/40' },
   software: { label: 'Phần mềm', emoji: '💻', color: 'text-indigo-600 bg-indigo-500/10 border-indigo-200 dark:border-indigo-950/40' },
-} as const;
+};
 
 export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
   grade,
@@ -191,10 +192,10 @@ export const GradeLibraryView: React.FC<GradeLibraryViewProps> = ({
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       }
       if (sortBy === 'titleAZ') {
-        return a.title.localeCompare(b.title, 'vi');
+        return (a.title || '').localeCompare(b.title || '', 'vi');
       }
       if (sortBy === 'titleZA') {
-        return b.title.localeCompare(a.title, 'vi');
+        return (b.title || '').localeCompare(a.title || '', 'vi');
       }
       return 0;
     });
